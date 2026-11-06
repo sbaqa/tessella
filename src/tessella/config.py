@@ -205,7 +205,7 @@ class Fix(BaseModel):
     shown on the ticket and `tessella fix apply` puts it on a git branch."""
 
     product: bool = True  # also fix product bugs, not only test bugs
-    steps: int = 6  # agent turns (read, search, propose) before it gives up
+    steps: int = 8  # agent turns (read, search, edit) before it gives up
     # Starts the app under test from the copy, so the patched code is what the tests hit:
     # e.g. "python -m uvicorn shop.app:app --port {port}". None: the tests start it themselves.
     app_command: str | None = None

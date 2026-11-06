@@ -107,7 +107,7 @@ fix:
   # patch that makes the failing test pass on every re-run, and fails no new test in the
   # suite, is put on the ticket. `tessella fix apply KAN-8` then puts it on a git branch.
   product: true
-  steps: 6
+  steps: 8
   # app_command: "python -m uvicorn shop.app:app --port {port}"   # start the app from the copy
   # app_url_env: DEMO_SHOP_URL                                     # how the tests find it
   # app_ready_path: /api/health

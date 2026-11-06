@@ -26,14 +26,8 @@ def test_refund_upper_case_code():
 def test_refund_known_code():
     assert refund("mosaic10") == 1.0
 '''
-GOOD = '''--- a/app.py
-+++ b/app.py
-@@ -4,2 +4,2 @@
- def refund(code):
--    return RULES[code]
-+    return RULES[code.lower()]
-'''
-WRONG = GOOD.replace("RULES[code.lower()]", "RULES.get(code, 0.0)")
+GOOD = {"old": "    return RULES[code]", "new": "    return RULES[code.lower()]"}
+WRONG = {"old": "return RULES[code]", "new": "return RULES.get(code, 0.0)"}  # loose indentation
 
 
 def _setup(tmp_path, suite=True):
@@ -82,11 +76,11 @@ def test_a_failed_patch_is_reported_back_and_the_next_one_is_kept(tmp_path, monk
     s, case = _setup(tmp_path)
     sent = _replies(monkeypatch,
                     {"thought": "look", "tool": "search", "query": "RULES"},
-                    {"thought": "default", "tool": "propose_patch", "path": "app.py", "diff": WRONG},
-                    {"thought": "lower it", "tool": "propose_patch", "path": "app.py", "diff": GOOD})
+                    {"thought": "default", "tool": "edit", "path": "app.py", **WRONG},
+                    {"thought": "lower it", "tool": "edit", "path": "app.py", **GOOD})
     diff, status = fixer_agent.run(case, s)
     assert status.startswith("verified") and "suite fails no new test" in status
-    assert diff.startswith("--- a/app.py\n+++ b/app.py\n@@") and "code.lower()" in diff
+    assert diff.startswith("--- a/app.py\n+++ b/app.py\n@@") and "+    return RULES[code.lower()]" in diff
     assert "app.py:1:" in sent[1]  # the search result reached the model
     assert "the test still fails" in sent[2]  # so did the failed patch
     assert (tmp_path / "app.py").read_text() == APP  # your files are untouched
@@ -94,9 +88,8 @@ def test_a_failed_patch_is_reported_back_and_the_next_one_is_kept(tmp_path, monk
 
 def test_a_patch_that_breaks_another_test_is_not_kept(tmp_path, monkeypatch):
     s, case = _setup(tmp_path)
-    breaks = GOOD.replace("RULES[code.lower()]", "1.0 if code.isupper() else RULES['x']")
-    _replies(monkeypatch, *[{"thought": "t", "tool": "propose_patch", "path": "app.py",
-                             "diff": breaks}] * 2)
+    breaks = {"old": "return RULES[code]", "new": "return 1.0 if code.isupper() else RULES['x']"}
+    _replies(monkeypatch, *[{"thought": "t", "tool": "edit", "path": "app.py", **breaks}] * 2)
     s.fix.steps = 2
     diff, status = fixer_agent.run(case, s)
     assert diff == "" and "other tests fail" in status and "test_refund_known_code" in status
@@ -105,7 +98,7 @@ def test_a_patch_that_breaks_another_test_is_not_kept(tmp_path, monkeypatch):
 def test_it_never_patches_tests_or_files_outside_the_repository(tmp_path, monkeypatch):
     s, case = _setup(tmp_path)
     sent = _replies(monkeypatch,
-                    {"thought": "t", "tool": "propose_patch", "path": "tests/test_app.py", "diff": GOOD},
+                    {"thought": "t", "tool": "edit", "path": "tests/test_app.py", **GOOD},
                     {"thought": "t", "tool": "read_file", "path": "../../etc/passwd"},
                     {"thought": "no", "tool": "give_up"})
     diff, status = fixer_agent.run(case, s)
@@ -115,7 +108,7 @@ def test_it_never_patches_tests_or_files_outside_the_repository(tmp_path, monkey
 
 def test_without_a_suite_the_status_says_so(tmp_path, monkeypatch):
     s, case = _setup(tmp_path, suite=False)
-    _replies(monkeypatch, {"thought": "t", "tool": "propose_patch", "path": "app.py", "diff": GOOD})
+    _replies(monkeypatch, {"thought": "t", "tool": "edit", "path": "app.py", **GOOD})
     diff, status = fixer_agent.run(case, s)
     assert diff and "suite was not run" in status
 
@@ -130,8 +123,9 @@ def test_fix_apply_puts_the_fix_on_a_branch(tmp_path, monkeypatch):
     for args in (["init", "-q"], ["add", "-A"],
                  ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "base"]):
         subprocess.run(["git", "-C", str(tmp_path), *args], check=True)
+    diff = fixer_agent.unified("app.py", APP, APP.replace("RULES[code]", "RULES[code.lower()]"))
     case.draft = Draft(kind=DraftKind.ticket, title="[test_failure] KeyError", body="b",
-                       root_cause="case sensitive", patch=GOOD, patch_status="verified: ...")
+                       root_cause="case sensitive", patch=diff, patch_status="verified: ...")
     db = tmp_path / ".tessella" / "t.sqlite"
     db.parent.mkdir()
     Store(db).save_case(case)
@@ -145,3 +139,12 @@ def test_fix_apply_puts_the_fix_on_a_branch(tmp_path, monkeypatch):
                          capture_output=True, text=True).stdout
     assert log.startswith("Fix: KeyError") and "Checked by Tessella: verified" in log
     assert "code.lower()" in (tmp_path / "app.py").read_text()
+
+
+def test_edits_match_loose_indentation_and_refuse_ambiguity():
+    text = "def f():\n    x = 1\n    return x\n"
+    assert fixer_agent.replace_once(text, "x = 1", "x = 2") == text.replace("x = 1", "x = 2")
+    loose = fixer_agent.replace_once(text, "x = 1\nreturn x", "x = 2\nreturn x")
+    assert loose == "def f():\n    x = 2\n    return x\n"
+    assert fixer_agent.replace_once(text, "x", "y").startswith("\0")  # several matches
+    assert fixer_agent.replace_once(text, "    2  x = 1", "x = 3").startswith("\0") is False
