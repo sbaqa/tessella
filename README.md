@@ -806,6 +806,7 @@ tickets without log lines, stacks or the reproduce request. Example client entry
 | `tessella calibrate [SIGNATURE]` | Time a manual investigation on a raw failure (no verdict shown) so the time-saved figure rests on your team's own numbers. Options: `--minutes N` to import a time you already know, `--no-ticket` if it did not end in a ticket, `--note`, `--list`, `--config` |
 | `tessella sync` | Read the status of the Jira tickets Tessella filed (fixed, closed as not a bug, still open) and store it for the report. Read-only. Option: `--config` |
 | `tessella merge OTHER.sqlite` | Bring another Tessella database (a CI artifact, a teammate's copy) into this one: new failures, decisions, runs, timings, ticket outcomes. The same file twice adds nothing, and the other file is never modified. Option: `--config` |
+| `tessella fix list`, `tessella fix apply KEY\|SIGNATURE` | List checked fixes; put one on a new git branch (`tessella/fix-<ticket>`) as one commit. Refuses with uncommitted changes; never pushes |
 | `tessella forget [SIGNATURE\|TICKET]` | List recorded decisions, or drop one (by signature, signature prefix, or ticket key) so its failure returns to the queue. Option: `--config` |
 | `tessella baseline IMAGE --test "TITLE"` | Save a green-run screenshot as the visual baseline for one test |
 | `tessella export` | (planned) Write regression tests from approved probe findings |
@@ -1035,6 +1036,7 @@ Honest status of v0.1. "Tested" means covered by the unit tests in `tests/`.
 | Visual diff against a baseline; vision reading | Works, tested (vision needs a local vision model) |
 | Ticket drafts with description, repro steps, actual/expected result, screenshots | Works, tested |
 | Fixer-written test patches | Works, tested: verified by re-running in a temporary copy |
+| Fixer agent for product bugs (`fix:` config, `tessella fix list` / `fix apply`) | Works, tested with a faked model: reads and searches the code, proposes a patch, checks it in a temporary copy with the app started from that copy (failing test on every re-run, suite fails no new test), retries with the failure output, and puts a checked fix on a git branch on request. Never changes your files or pushes |
 | Investigator loop (tool menu for an unsure reader) | Works, tested with a faked model |
 | Tile drawer, ticket outcomes (`tessella sync`), run comparison, short page, `tessella merge` | Works, tested offline with a faked Jira; the real status lookup has a test that needs your venv (respx) and has not run against a real Jira |
 | Time saved: measured review time, calibration, net figure with evidence labels | Works, tested; review timing starts the first time the queue shows a card, so earlier reviews are estimated. Not yet run against a real Jira |

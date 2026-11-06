@@ -349,6 +349,11 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
             from tessella.draft.patch import fix
 
             patch = fix(members[0], settings, rerun)  # re-runs: one cluster at a time
+        elif (use_model and rerun and settings.models.fixer is not None and verdict
+              and verdict.category == Category.product_bug and settings.fix.product):
+            from tessella.draft import fixer_agent
+
+            patch = fixer_agent.run(members[0], settings)  # sequential: it re-runs tests
         for c in members:
             c.verdict = verdict
             # Both product bugs and test bugs are actionable tickets someone must fix;
@@ -363,7 +368,9 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
                 if patch:
                     c.draft.patch, c.draft.patch_status = patch
                     if c.draft.patch:
-                        c.draft.body += (f"\n\n**Proposed test patch** ({c.draft.patch_status}):"
+                        what = ("Proposed fix" if verdict.category == Category.product_bug
+                                else "Proposed test patch")
+                        c.draft.body += (f"\n\n**{what}** ({c.draft.patch_status}):"
                                          f"\n```diff\n{c.draft.patch}```")
             store.save_case(c)
         if memory:

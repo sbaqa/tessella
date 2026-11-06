@@ -178,7 +178,7 @@
         <dt>Suggested fix</dt><dd>{{ case.draft.suggested_fix }}</dd>
         {% if case.draft.possible_duplicates %}<dt>Possible duplicate of</dt><dd>{{ case.draft.possible_duplicates | join(', ') }}</dd>{% endif %}
       </dl>
-      {% if case.draft.patch %}<div class="section-title">Proposed test patch ({{ case.draft.patch_status }})</div><pre class="patch">{{ case.draft.patch }}</pre>{% elif case.draft.patch_status %}<p><strong>Test patch:</strong> {{ case.draft.patch_status }}</p>{% endif %}
+      {% if case.draft.patch %}<div class="section-title">{{ 'Proposed fix, checked in a copy' if cat == 'product_bug' else 'Proposed test patch' }} ({{ case.draft.patch_status }})</div><pre class="patch">{{ case.draft.patch }}</pre>{% elif case.draft.patch_status %}<p><strong>Test patch:</strong> {{ case.draft.patch_status }}</p>{% endif %}
       {% elif case.verdict %}
       <div class="section-title">Why Tessella thinks so</div>
       <dl class="ticket">

@@ -46,7 +46,8 @@ def _never_ran(cmd: list[str], proc: subprocess.CompletedProcess) -> bool:
 
 
 def run_once(case: Case, command: str, extra_args: str = "", cwd: str | Path | None = None,
-             timeout: int = 600, repo: str | Path = ".") -> tuple[bool | None, str]:
+             timeout: int = 600, repo: str | Path = ".",
+             env: dict[str, str] | None = None) -> tuple[bool | None, str]:
     """One run of the test: (passed, last lines of output). passed is None when the
     command could not run the test at all."""
     test_id = test_id_for(case, repo)
@@ -55,7 +56,7 @@ def run_once(case: Case, command: str, extra_args: str = "", cwd: str | Path | N
     cmd = shlex.split(command.format(test_id=test_id)) + shlex.split(extra_args)
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
-                              check=False)
+                              check=False, env=env)
     except OSError as exc:
         return None, f"could not start: {exc}"
     except subprocess.TimeoutExpired:

@@ -101,6 +101,18 @@ github:
   token_env: GITHUB_TOKEN
   labels: [bug]
 
+fix:
+  # The fixer agent (needs models.fixer): for a product bug it reads the code the failure
+  # points to, proposes a patch, and checks it in a temporary copy of the repository. Only a
+  # patch that makes the failing test pass on every re-run, and fails no new test in the
+  # suite, is put on the ticket. `tessella fix apply KAN-8` then puts it on a git branch.
+  product: true
+  steps: 6
+  # app_command: "python -m uvicorn shop.app:app --port {port}"   # start the app from the copy
+  # app_url_env: DEMO_SHOP_URL                                     # how the tests find it
+  # app_ready_path: /api/health
+  # suite_command: "pytest -q tests/api"                           # must fail no new test
+
 ci:
   # `tessella ci` comments its summary on the pull request (GitHub Actions) or merge request
   # (GitLab CI), editing the same comment each run. Needs the API host in network.allow.

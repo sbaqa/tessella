@@ -748,6 +748,100 @@ def _eval_failures(r, runs: int, show_prompts: bool) -> None:
             console.print(c.get("error") or c.get("reply", ""), style="dim", markup=False, highlight=False)
 
 
+fix_app = typer.Typer(help="Fixes the fixer agent checked, ready to put on a branch.", no_args_is_help=True)
+app.add_typer(fix_app, name="fix")
+
+
+@fix_app.command("list")
+def fix_list(cfg: Optional[Path] = typer.Option(None, "--config", "-c")):
+    """Failures with a checked fix or test patch waiting to be applied."""
+    from tessella.memory.store import Store
+
+    s = config.load(cfg)
+    rows = _fixes(Store(s.storage.path))
+    if not rows:
+        console.print("No fixes yet. Configure models.fixer (and fix.* for product bugs), then "
+                      "run tessella triage.")
+        return
+    table = Table(title=f"{len(rows)} fix(es)")
+    for col in ("Signature", "Ticket", "File", "Checked"):
+        table.add_column(col)
+    from tessella.draft.fixer_agent import target_of
+
+    for case, key in rows:
+        table.add_row(case.signature[:8], key or "—", target_of(case.draft.patch) or "?",
+                      case.draft.patch_status)
+    console.print(table)
+
+
+def _fixes(store) -> list:
+    """(case, ticket key) for every stored case whose draft carries a patch, newest first."""
+    keys = {sig: d.ticket_key for sig, d in store.all_decisions() if d.ticket_key}
+    seen, out = set(), []
+    for case in reversed(store.all_cases()):
+        if case.draft and case.draft.patch and case.signature not in seen:
+            seen.add(case.signature)
+            out.append((case, keys.get(case.signature)))
+    return out
+
+
+@fix_app.command("apply")
+def fix_apply(which: str = typer.Argument(..., help="Ticket key (KAN-8) or signature prefix."),
+              branch: Optional[str] = typer.Option(None, "--branch", help="Branch name. Default: tessella/fix-<ticket or signature>."),
+              cfg: Optional[Path] = typer.Option(None, "--config", "-c")):
+    """Put a checked fix on a new git branch, as one commit. Never pushes; never touches a
+    branch with uncommitted changes."""
+    import subprocess
+
+    from tessella.draft.fixer_agent import target_of
+    from tessella.draft.patch import apply_diff
+    from tessella.memory.store import Store
+
+    s = config.load(cfg)
+    matches = [(c, k) for c, k in _fixes(Store(s.storage.path))
+               if which == k or c.signature.startswith(which)]
+    if len(matches) != 1:
+        console.print(f"[yellow]{'No fix matches' if not matches else 'Several fixes match'} "
+                      f"'{which}'.[/] Run `tessella fix list`.")
+        raise typer.Exit(1)
+    case, key = matches[0]
+    repo = Path(s.inputs.repo).resolve()
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+
+    top = git("rev-parse", "--show-toplevel")
+    if top.returncode != 0:
+        console.print("[red]Not a git repository:[/] run `git init` and commit first.")
+        raise typer.Exit(1)
+    if git("status", "--porcelain", "--untracked-files=no").stdout.strip():
+        console.print("[red]You have uncommitted changes.[/] Commit or stash them first.")
+        raise typer.Exit(1)
+    path = target_of(case.draft.patch)
+    target = (repo / path) if path else None
+    patched = apply_diff(target.read_text(), case.draft.patch) if target and target.is_file() else None
+    if patched is None:
+        console.print(f"[red]The fix no longer applies to {path or 'its file'}[/]: the code "
+                      "changed since it was checked. Run tessella triage again.")
+        raise typer.Exit(1)
+    name = branch or f"tessella/fix-{(key or case.signature[:8]).lower()}"
+    made = git("switch", "-c", name)
+    if made.returncode != 0:
+        console.print(f"[red]Could not create branch {name}:[/] {made.stderr.strip()}")
+        raise typer.Exit(1)
+    target.write_text(patched)
+    git("add", path)
+    title = (case.draft.title.split("] ", 1)[-1])[:60]
+    message = (f"Fix: {title}\n\n{case.draft.root_cause}\n\nChecked by Tessella: "
+               f"{case.draft.patch_status}" + (f"\nTicket: {key}" if key else ""))
+    done = git("commit", "-q", "-m", message)
+    if done.returncode != 0:
+        console.print(f"[red]Commit failed:[/] {done.stderr.strip() or done.stdout.strip()}")
+        raise typer.Exit(1)
+    console.print(f"Fix committed on branch [bold]{name}[/] ({path}). Review it with "
+                  f"`git show {name}`; push and open a PR when you are happy. Nothing was pushed.")
+
+
 models_app = typer.Typer(help="Choose and measure local models for this machine.", no_args_is_help=True)
 app.add_typer(models_app, name="models")
 

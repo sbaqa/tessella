@@ -197,6 +197,26 @@ class GitHub(BaseModel):
         return os.environ.get(self.token_env)
 
 
+class Fix(BaseModel):
+    """The fixer agent for product bugs (needs `models.fixer`). It reads the code a failure
+    points to, proposes a patch, and checks it in a temporary copy of the repository: the
+    failing test must pass on every re-run, and `suite_command` must fail no test that did
+    not already fail without the patch. Nothing is applied to your files; a checked fix is
+    shown on the ticket and `tessella fix apply` puts it on a git branch."""
+
+    product: bool = True  # also fix product bugs, not only test bugs
+    steps: int = 6  # agent turns (read, search, propose) before it gives up
+    # Starts the app under test from the copy, so the patched code is what the tests hit:
+    # e.g. "python -m uvicorn shop.app:app --port {port}". None: the tests start it themselves.
+    app_command: str | None = None
+    # The environment variable the tests read the app's address from, e.g. DEMO_SHOP_URL.
+    app_url_env: str | None = None
+    app_ready_path: str = "/"  # polled until it answers, after app_command starts
+    # The rest of the suite, run without and with the patch, e.g. "pytest -q -m 'not ui'".
+    # None: only the failing test is checked, and the ticket says so.
+    suite_command: str | None = None
+
+
 class Ci(BaseModel):
     """`tessella ci`: a summary comment on the pull request (GitHub Actions) or merge request
     (GitLab CI) the job runs for, edited in place on each run. Off unless turned on here or
@@ -301,6 +321,7 @@ class Settings(BaseModel):
     jira: Jira = Field(default_factory=Jira)
     github: GitHub = Field(default_factory=GitHub)
     ci: Ci = Field(default_factory=Ci)
+    fix: Fix = Field(default_factory=Fix)
     board: Literal["jira", "github"] | None = None
     ollama: OllamaLocal = Field(default_factory=OllamaLocal)
     network: Network = Field(default_factory=Network)
