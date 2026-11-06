@@ -1,0 +1,150 @@
+# Copy to tessella.yaml and adjust. Secrets always come from environment variables.
+inputs:
+  reports: ["playwright-report/", "allure-report/", "report.html", "test-results/*.xml"]
+  traces: ["test-results/**/trace.zip", "recordings/*.har"]
+  repo: .
+
+# Model roles. Each role is local or cloud. A sensible split: local reads, cloud writes.
+# The defaults suit a CPU-only laptop with 16 GB RAM (one small model reads logs AND
+# screenshots). See "Choosing models" in the README for bigger machines.
+models:
+  reader:                       # sees logs, stacks and evidence excerpts
+    provider: ollama_chat       # local: ollama_chat | vllm | lm_studio; cloud (LiteLLM): anthropic ...
+    name: qwen3.5:4b            # step up: qwen3.5:9b (about 2x slower on a CPU)
+    base_url: http://127.0.0.1:11435  # the project's own Ollama (see ollama: below)
+    think: false                # skip the thinking phase: minutes saved per step on a CPU
+    num_ctx: 8192               # room for the evidence pack (Ollama's default is 4096)
+    max_evidence_tokens: 3000   # cap on the evidence pack even if num_ctx allows more; null = fill num_ctx
+    max_steps_per_cluster: 4    # raise to 8 on a GPU or a team model server
+    min_confidence: 0.6
+    timeout_s: 600              # one call slower than this is abandoned: that cluster becomes unknown
+    # api_key_env: TESSELLA_MODEL_KEY  # a shared server that wants a key (vLLM --api-key): the variable's NAME
+    keep_alive: 30m             # Ollama keeps the model loaded this long between calls
+    two_step: true              # classify first, then write ticket fields (best for small models)
+    votes: 3                    # a verdict near min_confidence is asked again; majority wins
+    vote_margin: 0.15
+    parallel: 1                 # clusters judged at once; match OLLAMA_NUM_PARALLEL on a GPU
+  vision:                       # sees screenshots; keep it local
+    provider: ollama_chat
+    name: qwen3.5:4b            # the same model reads images, so only one copy is in memory
+    base_url: http://127.0.0.1:11435
+    think: false
+    num_ctx: 8192
+    max_image_px: 1024          # screenshots are scaled to this before the model sees them
+  embedder:                     # optional: finds failures like ones your team already reviewed
+    provider: ollama_chat
+    name: nomic-embed-text      # tessella models pull nomic-embed-text (about 0.3 GB); an embedding model, not a chat model
+    base_url: http://127.0.0.1:11435
+  # fixer:                      # writes test patches from a redacted summary; may be cloud
+  #   provider: anthropic
+  #   name: claude-sonnet-5-5
+  #   base_url: null
+  #   approve_each_call: true   # ask before every cloud call
+  #                             # also add "api.anthropic.com" to network.allow
+
+# What may be sent to a CLOUD model (local models see everything).
+data_policy:
+  may_leave: [redacted_summary, failing_test_file, diff_hunk]
+  never_leaves: [raw_logs, stack_traces, screenshots, test_data]
+  audit_log: .tessella/model_calls.jsonl
+  audit_payloads: false         # true = also store the exact text sent
+
+rerun:
+  command: "pytest {test_id} -q"
+  attempts: 2
+  detail_args: "-vv --tb=long"  # added for the investigator's detailed re-run
+
+logs:
+  source: file                  # file | loki | elasticsearch
+  path: logs/app.log
+  window_seconds: 60            # used when the report has no test times, and by the investigator
+  # url: http://loki.internal:3100   # loki/elasticsearch: add the host to network.allow
+  # query: '{app="shop"}'            # loki: LogQL selector; elasticsearch: a query string
+  # utc: false                       # file timestamps are this machine's local time
+
+preflight:                      # checked once per run; a failure here labels every cluster environment
+  urls: []                      # e.g. ["https://staging.shop.local/health"]
+
+screenshots:
+  redact: auto                  # auto | required | off: black out secrets before attaching to tickets
+
+probe:
+  base_url: https://staging.shop.local
+  scope:
+    include: ["/api/*"]
+    exclude: ["/api/health"]
+  identities:
+    user_a: { login_url: /api/auth/login, username: anna@test.io, password_env: A_PASS }
+    user_b: { login_url: /api/auth/login, username: bob@test.io, password_env: B_PASS }
+  mutators: [boundaries, types, identity, order, concurrency]
+  # Schemathesis (--report junit) and ZAP (-J report.json) reports passed to `tessella triage`
+  # become probe findings; those below this severity are left out (info|low|medium|high|critical).
+  min_severity: low
+
+# Where an approved draft gets filed. Pick one; omit `board` to just record decisions
+# without filing anywhere.
+board: jira                     # jira | github
+
+jira:
+  url: https://jira.example.com
+  project: QA
+  token_env: JIRA_TOKEN
+  # Duplicate search: each new draft lists issues already in the project that read like it
+  # (possible duplicates for the reviewer; nothing is skipped or linked automatically).
+  search_duplicates: true
+  duplicate_threshold: 0.82        # cosine similarity, when models.embedder is set
+  duplicate_text_threshold: 0.6    # share of the issue summary's words, without an embedder
+  duplicate_limit: 3
+
+github:
+  repo: my-org/my-repo           # owner/repo
+  token_env: GITHUB_TOKEN
+  labels: [bug]
+
+ci:
+  # `tessella ci` comments its summary on the pull request (GitHub Actions) or merge request
+  # (GitLab CI), editing the same comment each run. Needs the API host in network.allow.
+  comment: false                 # or `tessella ci --comment`
+  # token_env: GITHUB_TOKEN      # default GITHUB_TOKEN on GitHub, GITLAB_TOKEN on GitLab
+  # queue_url: https://tessella.lan:8484
+
+network:
+  # Everything else is blocked. A cloud fixer only works once its host is listed here,
+  # e.g. add "api.anthropic.com".
+  allow: ["jira.example.com", "api.github.com", "localhost:11435"]
+  # `tessella --offline` refuses everything but loopback, whatever `allow` says; hosts inside
+  # your network it may still reach, e.g. a team model server:
+  # offline_allow: ["gpu-box.lan:8000"]
+
+redact: ["Authorization", "Cookie", "password", "card_number", "iban"]
+
+storage:
+  path: .tessella/tessella.sqlite
+
+# The project's own Ollama server: models live in this repository's .tessella/models (found
+# from any subfolder, e.g. examples/demo_shop), and Tessella starts the server when a role
+# uses it. Copy models you already have with `tessella models import`, or download with
+# `tessella models pull`. Set enabled: false to use a global Ollama on localhost:11434.
+ollama:
+  enabled: true
+  port: 11435
+  models_dir: .tessella/models
+
+# A queue several reviewers share (`tessella queue --host 0.0.0.0`): each signs in with their
+# name and the password in their environment variable on the queue server.
+# team:
+#   reviewers: { anna: TESSELLA_PW_ANNA, bob: TESSELLA_PW_BOB }
+
+mcp:                            # `tessella mcp`, for coding assistants (read-only)
+  excerpts: true                # false: summaries and verdicts only, for an assistant on a cloud model
+# inputs.green_ref: origin/main   # diff against this instead of the last green triage
+
+cache:                          # replies to identical prompts, reused on re-triage (local file)
+  enabled: true
+  path: .tessella/model_cache.sqlite
+
+memory:                         # similarity recall; used only when models.embedder is set
+  path: .tessella/vectors.sqlite  # derived data: delete it and run `tessella reindex` to rebuild
+  similar_threshold: 0.9        # at or above: cited as "reads like KAN-12", shown as a possible duplicate
+  examples: 2                   # how many similar reviewed failures the reader sees as examples
+  example_threshold: 0.75

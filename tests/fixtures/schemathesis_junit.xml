@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites errors="0" failures="2" skipped="0" tests="2" time="2.918904">
+  <testsuite name="schemathesis" hostname="vm" errors="0" failures="2" skipped="0" tests="2" time="2.918904">
+    <testcase name="POST /orders" time="2.775147">
+      <failure type="failure" message="ST101, ST103">1. Test Case ID: bxPLmZ
+
+- ST101 Server error
+
+- ST103 Undocumented status code
+
+    Received: 500
+    Documented: 201, 422
+
+[500] Internal Server Error:
+
+    `Internal Server Error`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Content-Type: application/json' -d '{"sku": "", "qty": false}' http://127.0.0.1:8765/orders</failure>
+    </testcase>
+    <testcase name="GET /orders/{oid}" time="0.143757">
+      <failure type="failure" message="ST103">1. Test Case ID: GTcD5k
+
+- ST103 Undocumented status code
+
+    Received: 404
+    Documented: 200, 422
+
+[404] Not Found:
+
+    `{"detail":"Not Found"}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' http://127.0.0.1:8765/orders/0</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tessella review queue</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef1f4; --panel: #ffffff; --panel-2: #f5f7f9; --ink: #121920; --ink-2: #46525d;
+      --ink-3: #6b7680; --line: #dde2e7; --focus: #2a78d6;
+      --product_bug: #2a78d6; --test_bug: #eb6834; --flaky: #1baf7a; --environment: #eda100;
+      --test_data: #e87ba4; --unknown: #7d8791; --none: #aab3bb; --ok: #1baf7a;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg: #0e1114; --panel: #1a1d20; --panel-2: #22272b; --ink: #eceae6; --ink-2: #b9bfc6;
+        --ink-3: #8f98a0; --line: #2f353b; --focus: #6da7ec;
+        --product_bug: #3987e5; --test_bug: #d95926; --flaky: #199e70; --environment: #c98500;
+        --test_data: #d55181; --unknown: #8a949e; --none: #5d6670; --ok: #199e70;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink);
+           font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    a { color: inherit; text-underline-offset: 3px; }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+    code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.86em; }
+
+    header.top { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+    .bar { max-width: 1040px; margin: 0 auto; padding: 0.7rem 1rem; display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+    .mark { display: grid; grid-template-columns: repeat(2, 9px); gap: 2px; }
+    .mark i { width: 9px; height: 9px; border-radius: 2px; display: block; }
+    .mark i:nth-child(1) { background: var(--product_bug); } .mark i:nth-child(2) { background: var(--test_bug); }
+    .mark i:nth-child(3) { background: var(--flaky); } .mark i:nth-child(4) { background: var(--environment); }
+    .brand { font-weight: 700; }
+    .grow { flex: 1; }
+    .who { color: var(--ink-2); font-size: 0.88rem; }
+    nav.links { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    nav.links a { text-decoration: none; font-size: 0.88rem; font-weight: 600; padding: 0.4rem 0.8rem;
+                  border: 1px solid var(--line); border-radius: 999px; }
+    nav.links a:hover { background: var(--panel-2); }
+
+    main { max-width: 1040px; margin: 0 auto; padding: 1.4rem 1rem 4rem; }
+    h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 0.3rem; letter-spacing: -0.01em; }
+    .lede { color: var(--ink-2); margin: 0 0 1.2rem; max-width: 46em; }
+    .stats { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0 0 1.4rem; }
+    .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0.55rem 0.9rem; }
+    .stat b { font-size: 1.25rem; margin-right: 0.35rem; }
+    .stat span { color: var(--ink-2); font-size: 0.88rem; }
+    .notice { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--focus);
+              border-radius: 8px; padding: 0.8rem 1rem; margin: 0 0 1.4rem; }
+    h2 { font-size: 1.05rem; margin: 2rem 0 0.8rem; }
+
+    .case { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin: 0 0 1.1rem;
+            border-left: 5px solid var(--hue, var(--none)); overflow: hidden; }
+    .case > .head { padding: 1rem 1.2rem 0.6rem; }
+    .chips { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.4rem; }
+    .chip { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 650; white-space: nowrap;
+            padding: 0.15rem 0.6rem; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); }
+    .chip.cat { background: color-mix(in srgb, var(--hue) 16%, transparent); border-color: var(--hue); }
+    .chip i { width: 0.6rem; height: 0.6rem; border-radius: 2px; background: var(--hue); display: inline-block; }
+    .case h3 { font-size: 1.08rem; margin: 0.2rem 0 0.15rem; overflow-wrap: anywhere; }
+    .case .test { color: var(--ink-3); font-size: 0.82rem; overflow-wrap: anywhere; margin: 0; }
+    .todo { margin: 0.7rem 1.2rem 0; padding: 0.6rem 0.8rem; border-radius: 8px; background: var(--panel-2);
+            font-weight: 600; font-size: 0.92rem; }
+    .todo::before { content: "What to do: "; color: var(--ink-3); font-weight: 600; }
+    .body { padding: 0.9rem 1.2rem 0.4rem; }
+    dl.ticket { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 0.45rem 1rem; margin: 0; }
+    dl.ticket dt { color: var(--ink-3); font-size: 0.86rem; font-weight: 600; }
+    dl.ticket dd { margin: 0; overflow-wrap: anywhere; }
+    dl.ticket pre { margin: 0; white-space: pre-wrap; font-family: inherit; font-size: inherit; }
+    @media (max-width: 640px) { dl.ticket { grid-template-columns: 1fr; } dl.ticket dt { margin-top: 0.4rem; } }
+    .section-title { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+                     color: var(--ink-3); margin: 1.1rem 0 0.5rem; }
+    .shots { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+    .shots img { width: 240px; max-width: 100%; height: 150px; object-fit: cover; object-position: top;
+                 border: 1px solid var(--line); border-radius: 8px; display: block; }
+    details.ev { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 0.4rem; background: var(--panel-2); }
+    details.ev summary { cursor: pointer; padding: 0.45rem 0.7rem; font-size: 0.88rem; overflow-wrap: anywhere; }
+    details.ev summary b { font-weight: 650; margin-right: 0.3rem; }
+    details.ev pre { margin: 0; padding: 0.6rem 0.8rem; border-top: 1px solid var(--line); white-space: pre-wrap;
+                     overflow-wrap: anywhere; max-height: 18rem; overflow: auto; }
+    pre.patch { background: var(--panel-2); padding: 0.6rem 0.8rem; border-radius: 8px; white-space: pre-wrap; }
+
+    .actions { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; padding: 0.9rem 1.2rem;
+               border-top: 1px solid var(--line); background: var(--panel-2); margin-top: 0.8rem; }
+    .actions form { display: flex; gap: 0.4rem; align-items: center; margin: 0; }
+    button, select { font: inherit; font-size: 0.9rem; border-radius: 8px; cursor: pointer; }
+    button { padding: 0.5rem 1rem; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-weight: 600; }
+    button:hover { border-color: var(--ink-3); }
+    button.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+    button.quiet { border-color: transparent; background: transparent; color: var(--ink-3); font-weight: 500; }
+    select { padding: 0.45rem 0.6rem; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+    .actions .note { color: var(--ink-3); font-size: 0.82rem; }
+    .actions .push { flex: 1; }
+
+    .empty { background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; padding: 1.4rem;
+             text-align: center; color: var(--ink-2); }
+    table.done { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line);
+                 border-radius: 12px; overflow: hidden; font-size: 0.9rem; }
+    table.done th { text-align: left; color: var(--ink-3); font-size: 0.8rem; font-weight: 650; padding: 0.6rem 0.8rem;
+                    border-bottom: 1px solid var(--line); background: var(--panel-2); }
+    table.done td { padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    table.done tr:last-child td { border-bottom: 0; }
+    table.done .msg { color: var(--ink-3); font-size: 0.8rem; margin: 0.2rem 0 0; overflow-wrap: anywhere; }
+    .scroll { overflow-x: auto; }
+    @media (max-width: 640px) {
+      table.done, table.done tbody, table.done tr, table.done td { display: block; width: 100%; }
+      table.done thead { display: none; }
+      table.done tr { border-bottom: 1px solid var(--line); padding: 0.4rem 0; }
+      table.done td { border: 0; padding: 0.2rem 0.8rem; }
+    }
+    .cat-product_bug { --hue: var(--product_bug); } .cat-test_bug { --hue: var(--test_bug); }
+    .cat-flaky { --hue: var(--flaky); } .cat-environment { --hue: var(--environment); }
+    .cat-test_data { --hue: var(--test_data); } .cat-unknown { --hue: var(--unknown); } .cat-none { --hue: var(--none); }
+  </style>
+</head>
+<body>
+{% set labels = {'product_bug': 'Product bug', 'test_bug': 'Test bug', 'flaky': 'Flaky', 'environment': 'Environment',
+                 'test_data': 'Test data', 'unknown': 'Unclear'} %}
+{% set reason_labels = {'not_a_bug': 'Not a bug', 'test_bug': 'Test bug', 'environment': 'Environment problem',
+                        'test_data': 'Test data problem', 'flaky': 'Flaky', 'duplicate': 'Duplicate'} %}
+<header class="top">
+  <div class="bar">
+    <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+    <span class="brand">Tessella review queue</span>
+    <span class="grow"></span>
+    {% if reviewer %}<span class="who">Signed in as <strong>{{ reviewer }}</strong>.</span>{% endif %}
+    <nav class="links" aria-label="Other pages">
+      <a href="/report">Open the dashboard</a>
+      {% for r in reports %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.name }} &#8599;</a>{% endfor %}
+    </nav>
+  </div>
+</header>
+<main>
+  <h1>{% if cases %}{{ cases | length }} failure{{ '' if cases | length == 1 else 's' }} to review{% else %}Nothing to review{% endif %}</h1>
+  <p class="lede">Each card is one failure Tessella investigated. Nothing is filed to a board until you approve it; rejecting records why, so the same failure is not drafted again.</p>
+  {% if cases %}
+  {% set drafted = cases | selectattr('draft') | list | length %}
+  <div class="stats">
+    <div class="stat"><b>{{ drafted }}</b><span>bug draft{{ '' if drafted == 1 else 's' }} to approve or reject</span></div>
+    <div class="stat"><b>{{ cases | length - drafted }}</b><span>not a bug ticket, your call</span></div>
+    <div class="stat"><b>{{ decisions | length }}</b><span>decided recently</span></div>
+  </div>
+  {% endif %}
+  {% if latest %}
+  <p class="notice">{{ "Today's" if latest.today else "The latest run's" }}
+    {% if latest.failures < latest.total %}{{ latest.failures }} of {{ latest.total }}{% else %}{{ latest.failures }}{% endif %}
+    failure{{ '' if latest.failures == 1 else 's' }} match{{ 'es' if latest.failures == 1 else '' }} earlier decisions — see below.
+    To review one again: <code>tessella forget {{ latest.forget }}</code></p>
+  {% endif %}
+
+  {% for case in cases %}
+  {% set cat = case.verdict.category if case.verdict else 'none' %}
+  <article class="case cat-{{ cat }}" id="case-{{ case.id }}">
+    <div class="head">
+      <div class="chips">
+        <span class="chip cat"><i></i>{{ labels.get(cat, 'No verdict yet') }}{% if case.verdict %} · {{ '%.0f' % (case.verdict.confidence * 100) }}% sure{% endif %}</span>
+        {% if case.draft %}<span class="chip">Ticket draft ready</span>{% else %}<span class="chip">Nothing to file</span>{% endif %}
+        {% if allure[case.id] %}<a class="chip" href="{{ allure[case.id] }}" target="_blank" rel="noopener">Open in Allure &#8599;</a>{% endif %}
+      </div>
+      <h3>{{ case.draft.title if case.draft else case.title }}</h3>
+      <p class="test">{{ case.test_id or case.title }}</p>
+    </div>
+    <p class="todo">{{ todo[case.id] }}</p>
+    <div class="body">
+      {% if case.draft %}
+      <div class="section-title">The ticket that approving files</div>
+      <dl class="ticket">
+        <dt>Description</dt><dd>{{ case.draft.description }}</dd>
+        <dt>Steps to reproduce</dt><dd><pre>{{ case.draft.steps_to_reproduce }}</pre></dd>
+        <dt>Actual result</dt><dd>{{ case.draft.actual_result }}</dd>
+        <dt>Expected result</dt><dd>{{ case.draft.expected_result }}</dd>
+        <dt>Environment</dt><dd>{{ case.draft.environment }}</dd>
+        <dt>Root cause (suspected)</dt><dd>{{ case.draft.root_cause }}</dd>
+        <dt>Suggested fix</dt><dd>{{ case.draft.suggested_fix }}</dd>
+        {% if case.draft.possible_duplicates %}<dt>Possible duplicate of</dt><dd>{{ case.draft.possible_duplicates | join(', ') }}</dd>{% endif %}
+      </dl>
+      {% if case.draft.patch %}<div class="section-title">Proposed test patch ({{ case.draft.patch_status }})</div><pre class="patch">{{ case.draft.patch }}</pre>{% elif case.draft.patch_status %}<p><strong>Test patch:</strong> {{ case.draft.patch_status }}</p>{% endif %}
+      {% elif case.verdict %}
+      <div class="section-title">Why Tessella thinks so</div>
+      <dl class="ticket">
+        <dt>Reason</dt><dd>{{ case.verdict.root_cause }}</dd>
+        <dt>The failure</dt><dd class="mono">{{ case.message | truncate(400) }}</dd>
+      </dl>
+      {% else %}
+      <dl class="ticket"><dt>The failure</dt><dd class="mono">{{ case.message | truncate(400) }}</dd></dl>
+      {% endif %}
+      {% set images = case.screenshots + (case.evidence | selectattr('image') | map(attribute='image') | list) %}
+      {% if images %}
+      <div class="section-title">Screenshots</div>
+      <div class="shots">{% for img in images %}<a href="/cases/{{ case.id }}/image/{{ loop.index0 }}" target="_blank"><img loading="lazy" src="/cases/{{ case.id }}/image/{{ loop.index0 }}" alt="Screenshot {{ loop.index }} for {{ case.title }}"></a>{% endfor %}</div>
+      {% endif %}
+      {% if case.evidence %}
+      <div class="section-title">Evidence ({{ case.evidence | length }})</div>
+      {% for ev in case.evidence %}
+      <details class="ev"><summary><b>[{{ loop.index0 }}] {{ ev.kind }}</b>{{ ev.summary }}</summary>{% if ev.excerpt %}<pre>{{ ev.excerpt }}</pre>{% endif %}</details>
+      {% endfor %}
+      {% endif %}
+    </div>
+    <div class="actions">
+      {% if case.draft %}
+      <form method="post" action="/cases/{{ case.id }}/decide">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="action" value="approve"><button class="primary">Approve and file</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/cases/{{ case.id }}/decide">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="action" value="reject">
+        <label class="note" for="reason-{{ case.id }}">Reject as</label>
+        <select name="reason" id="reason-{{ case.id }}">{% for r in reasons %}<option value="{{ r }}"{% if r == suggest[case.id] %} selected{% endif %}>{{ reason_labels.get(r, r) }}{% if r == suggest[case.id] %} (suggested){% endif %}</option>{% endfor %}</select>
+        <button class="{{ '' if case.draft else 'primary' }}">Reject</button>
+      </form>
+      <span class="push"></span>
+      <form method="post" action="/cases/{{ case.id }}/decide">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="action" value="delete"><button class="quiet" title="Remove this card without a decision">Delete</button>
+      </form>
+    </div>
+  </article>
+  {% else %}
+  <p class="empty">No open failures. Run <code>tessella triage</code> after your next test run.</p>
+  {% endfor %}
+
+  {% if decisions %}
+  <h2>Recently decided</h2>
+  <div class="scroll"><table class="done">
+    <thead><tr><th>Test</th><th>Verdict</th><th>Decision</th><th>Ticket</th></tr></thead>
+    <tbody>
+    {% for case, decision in decisions %}
+    {% set cat = case.verdict.category if case.verdict else 'none' %}
+    <tr>
+      <td><strong>{{ case.test_id or case.title }}</strong>
+        {% if case.test_id and case.title != case.test_id %}<div class="msg">{{ case.title }}</div>{% endif %}
+        {% if case.message %}<p class="msg">{{ case.message | truncate(240) }}</p>{% endif %}</td>
+      <td class="cat-{{ cat }}"><span class="chip cat"><i></i>{{ labels.get(cat, 'No verdict') }}{% if case.verdict %} · {{ '%.0f' % (case.verdict.confidence * 100) }}%{% endif %}</span></td>
+      <td><strong>{{ {'approve': 'approved', 'edit': 'approved', 'reject': 'rejected', 'delete': 'deleted'}.get(decision.action, decision.action) }}</strong>{% if decision.reason %} ({{ decision.reason }}){% endif %}
+        <div class="msg">by {{ decision.by }} on {{ decision.at.strftime('%Y-%m-%d %H:%M') }}</div></td>
+      <td>{% if decision.ticket_url %}<a href="{{ decision.ticket_url }}" target="_blank" rel="noopener">{{ decision.ticket_key or decision.ticket_url }}</a>{% elif decision.ticket_key %}{{ decision.ticket_key }}{% else %}no ticket{% endif %}
+        {% if decision.board %}<div class="msg">{{ decision.board }}</div>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+</main>
+</body>
+</html>

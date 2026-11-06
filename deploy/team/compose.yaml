@@ -1,0 +1,49 @@
+# A team server: one GPU machine runs the model for everyone, and the review queue that
+# several reviewers sign in to. From this folder, with your team config next to it:
+#
+#   cp team.env.example team.env     # then fill in the key and passwords; never commit it
+#   docker compose --env-file team.env up -d
+#
+# Laptops and CI runners point their reader at it, with the key in an environment variable:
+#   models:
+#     reader: {provider: hosted_vllm, location: local, name: <VLLM_MODEL>,
+#              base_url: "https://gpu-box.lan:8000/v1", api_key_env: TESSELLA_MODEL_KEY}
+#   network: {allow: ["gpu-box.lan:8000"], offline_allow: ["gpu-box.lan:8000"]}
+#
+# Model weights come from ./hf-cache (copy them in, e.g. `huggingface-cli download` on a
+# connected machine); HF_HUB_OFFLINE stops vLLM from fetching anything.
+name: tessella-team
+
+services:
+  vllm:
+    image: vllm/vllm-openai:v0.32.0@sha256:befccf0e7e4089aa23926bb6f887a85c0d46c2a99e6de5c5ffdf5cb7957c5b34
+    command: ["--model", "${VLLM_MODEL}", "--max-model-len", "${VLLM_MAX_LEN:-32768}",
+              "--served-model-name", "${VLLM_MODEL}"]
+    environment:
+      VLLM_API_KEY: "${VLLM_API_KEY:?set VLLM_API_KEY in team.env}"  # every request needs it
+      HF_HUB_OFFLINE: "1"
+    volumes:
+      - ./hf-cache:/root/.cache/huggingface
+    ports: ["8000:8000"]
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+
+  queue:
+    build: ../..
+    image: tessella:0.1.0
+    user: "10001:10001"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    working_dir: /work
+    volumes:
+      - ${TESSELLA_PROJECT:-./project}:/work   # tessella.yaml with team.reviewers, .tessella/
+      - ./tls:/tls:ro                          # cert.pem and key.pem for HTTPS
+    env_file: [team.env]                       # one password variable per reviewer
+    ports: ["8484:8484"]
+    command: ["queue", "--host", "0.0.0.0",
+              "--tls-cert", "/tls/cert.pem", "--tls-key", "/tls/key.pem"]

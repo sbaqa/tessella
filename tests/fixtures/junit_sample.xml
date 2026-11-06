@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+  <testsuite name="api" tests="4" failures="3" errors="0">
+    <testcase classname="tests.test_orders" name="test_cancel_order_1" time="0.4">
+      <failure message="AssertionError: expected status 200, got 500 for order 8812">Traceback (most recent call last):
+  File "tests/test_orders.py", line 42, in test_cancel_order_1
+    assert r.status_code == 200
+AssertionError: expected status 200, got 500 for order 8812</failure>
+    </testcase>
+    <testcase classname="tests.test_orders" name="test_cancel_order_2" time="0.4">
+      <failure message="AssertionError: expected status 200, got 500 for order 9931">Traceback (most recent call last):
+  File "tests/test_orders.py", line 42, in test_cancel_order_2
+    assert r.status_code == 200
+AssertionError: expected status 200, got 500 for order 9931</failure>
+    </testcase>
+    <testcase classname="tests.test_login" name="test_login" time="0.2">
+      <failure message="TimeoutError: waiting for selector '#submit'">Traceback (most recent call last):
+  File "tests/test_login.py", line 12, in test_login
+    page.click('#submit')
+TimeoutError: waiting for selector '#submit'</failure>
+    </testcase>
+    <testcase classname="tests.test_health" name="test_ok" time="0.1"/>
+  </testsuite>
+</testsuites>

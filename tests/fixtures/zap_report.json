@@ -1,0 +1,71 @@
+{
+  "@programName": "ZAP",
+  "@version": "2.15.0",
+  "@generated": "Mon, 27 Oct 2026 17:30:00",
+  "site": [
+    {
+      "@name": "http://shop.local:8080",
+      "@host": "shop.local",
+      "@port": "8080",
+      "@ssl": "false",
+      "alerts": [
+        {
+          "pluginid": "40012",
+          "alertRef": "40012",
+          "alert": "Cross Site Scripting (Reflected)",
+          "name": "Cross Site Scripting (Reflected)",
+          "riskcode": "3",
+          "confidence": "4",
+          "riskdesc": "High (Confirmed)",
+          "desc": "<p>Cross-site Scripting (XSS) is an attack technique that involves echoing attacker-supplied code into a user's browser instance.</p>",
+          "instances": [
+            {"uri": "http://shop.local:8080/search?q=%3Cscript%3E", "method": "GET", "param": "q",
+             "attack": "<scrIpt>alert(1);</ScRipt>", "evidence": "<scrIpt>alert(1);</ScRipt>", "otherinfo": ""}
+          ],
+          "count": "1",
+          "solution": "<p>Encode output for the HTML context.</p>",
+          "otherinfo": "",
+          "reference": "<p>https://owasp.org/www-community/attacks/xss/</p>",
+          "cweid": "79",
+          "wascid": "8",
+          "sourceid": "1"
+        },
+        {
+          "pluginid": "10038",
+          "alertRef": "10038-1",
+          "alert": "Content Security Policy (CSP) Header Not Set",
+          "name": "Content Security Policy (CSP) Header Not Set",
+          "riskcode": "2",
+          "confidence": "3",
+          "riskdesc": "Medium (High)",
+          "desc": "<p>Content Security Policy (CSP) is an added layer of security.</p>",
+          "instances": [
+            {"uri": "http://shop.local:8080/", "method": "GET", "param": "", "attack": "", "evidence": "", "otherinfo": ""},
+            {"uri": "http://shop.local:8080/cart?token=abc", "method": "GET", "param": "", "attack": "", "evidence": "", "otherinfo": ""}
+          ],
+          "count": "2",
+          "solution": "<p>Set the Content-Security-Policy header.</p>",
+          "otherinfo": "", "reference": "", "cweid": "693", "wascid": "15", "sourceid": "3"
+        },
+        {
+          "pluginid": "10037",
+          "alertRef": "10037",
+          "alert": "Server Leaks Information via \"X-Powered-By\" HTTP Response Header Field(s)",
+          "riskcode": "0", "confidence": "2", "riskdesc": "Informational (Medium)",
+          "desc": "<p>The server leaks information.</p>",
+          "instances": [{"uri": "http://shop.local:8080/", "method": "GET", "evidence": "X-Powered-By: Express"}],
+          "count": "1", "solution": "", "cweid": "200", "wascid": "13", "sourceid": "3"
+        },
+        {
+          "pluginid": "10020",
+          "alertRef": "10020-1",
+          "alert": "Missing Anti-clickjacking Header",
+          "riskcode": "2", "confidence": "0", "riskdesc": "Medium (False Positive)",
+          "desc": "<p>Marked false positive.</p>",
+          "instances": [{"uri": "http://shop.local:8080/", "method": "GET"}],
+          "count": "1", "solution": "", "cweid": "1021", "wascid": "15", "sourceid": "3"
+        }
+      ]
+    }
+  ]
+}

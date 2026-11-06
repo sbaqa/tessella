@@ -1,0 +1,15 @@
+# What the demo shop's failures really are, for `tessella eval`.
+#   tessella eval --golden tessella.golden.yaml --runs 3
+# match: part of the test name or id. facts: words a good diagnosis mentions (optional).
+# The flaky test passes about two runs in three; when it passed, eval lists it as unmatched.
+cases:
+  - match: test_cancel_paid_discounted_order
+    category: product_bug             # bug 1: the refund lookup crashes with a 500
+    facts: [cancel, "500"]
+  - match: test_cancel_discounted_order
+    category: product_bug             # bug 1 again, from the UI
+  - match: test_login
+    category: test_bug                # bug 2: the test clicks #login, the button is #sign-in
+    facts: ["#login"]
+  - match: test_recommendations_respond_quickly
+    category: flaky                   # 0 to 1.2 s against a 0.8 s budget
