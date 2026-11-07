@@ -85,9 +85,9 @@ def create_app(settings: Settings):
             request, "queue.html",
             {
                 "cases": cases,
-                "reports": [{"url": f"/reports/{i}/", "name": _report_name(d)}
-                            for i, d in enumerate(report_dirs)],
-                "allure": {c.id: _allure_link(c, report_dirs) for c in cases},
+                "reports": [_report_link(i, d) for i, d in enumerate(report_dirs)],
+                "allure": {c.id: _allure_link(c, report_dirs)
+                           for c in [*cases, *(case for case, _ in decisions)]},
                 "todo": {c.id: _todo(c) for c in cases},
                 "suggest": {c.id: _suggested_reason(c) for c in cases},
                 "reasons": list(RejectReason),
@@ -175,6 +175,15 @@ def _report_dirs(settings: Settings) -> list[Path]:
         if p.is_dir() and (p / "index.html").is_file() and p.resolve() not in out:
             out.append(p.resolve())
     return out
+
+
+def _report_link(i: int, folder: Path) -> dict:
+    """The navbar link: Allure opens on Categories, which lists every failed and broken
+    test of the run, decided or not; other reports open on their front page."""
+    name = _report_name(folder)
+    if name == "Allure report":
+        return {"url": f"/reports/{i}/#categories", "name": "Allure: all failures"}
+    return {"url": f"/reports/{i}/", "name": name}
 
 
 def _report_name(folder: Path) -> str:

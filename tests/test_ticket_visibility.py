@@ -149,7 +149,7 @@ def test_queue_serves_the_allure_report_and_links_each_failure_to_it(tmp_path, m
                  inputs={"reports": ["reports/allure-report", "missing/"]})
     client = TestClient(create_app(s))
     page = client.get("/").text
-    assert '<a href="/reports/0/" target="_blank" rel="noopener">Allure report' in page
+    assert '<a href="/reports/0/#categories" target="_blank" rel="noopener">Allure: all failures' in page
     assert 'href="/reports/0/#testresult/abc123"' in page
     assert client.get("/reports/0/").text == "<html>allure</html>"
     assert client.get("/reports/0/../../t.sqlite").status_code == 404  # only the report folder
@@ -163,3 +163,26 @@ def test_a_test_that_failed_another_way_is_listed_once(tmp_path):
     store.save_case(old.model_copy(update={"signature": "new", "message": "took 1.15s"}))
     page = _queue(tmp_path).get("/").text
     assert page.count("test_slow") >= 1 and "Recently decided" not in page
+
+
+def test_decided_failures_link_to_allure_too(tmp_path, monkeypatch):
+    from tessella.config import Settings
+    from tessella.models import Evidence, EvidenceKind
+    from tessella.queue.app import create_app
+    from starlette.testclient import TestClient
+
+    monkeypatch.chdir(tmp_path)
+    report = tmp_path / "reports" / "allure-report"
+    (report / "data" / "test-cases").mkdir(parents=True)
+    (report / "index.html").write_text("<html>allure</html>")
+    store = Store(tmp_path / "t.sqlite")
+    done = Case(id="c2", origin=Origin.test_failure, title="test_done", signature="s2",
+                evidence=[Evidence(kind=EvidenceKind.report, summary="Allure status: failed",
+                                   ref="reports/allure-report/data/test-cases/def456.json")])
+    store.save_case(done)
+    store.record(done, Decision(action=Action.approve, by="anna", at=datetime(2026, 11, 6),
+                                ticket_key="KAN-7"))
+    s = Settings(storage={"path": str(tmp_path / "t.sqlite")},
+                 inputs={"reports": ["reports/allure-report"]})
+    page = TestClient(create_app(s)).get("/").text
+    assert 'href="/reports/0/#testresult/def456"' in page

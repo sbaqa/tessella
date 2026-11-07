@@ -235,7 +235,8 @@
     <tr>
       <td><strong>{{ case.test_id or case.title }}</strong>
         {% if case.test_id and case.title != case.test_id %}<div class="msg">{{ case.title }}</div>{% endif %}
-        {% if case.message %}<p class="msg">{{ case.message | truncate(240) }}</p>{% endif %}</td>
+        {% if case.message %}<p class="msg">{{ case.message | truncate(240) }}</p>{% endif %}
+        {% if allure[case.id] %}<a class="msg" href="{{ allure[case.id] }}" target="_blank" rel="noopener">Open in Allure &#8599;</a>{% endif %}</td>
       <td class="cat-{{ cat }}"><span class="chip cat"><i></i>{{ labels.get(cat, 'No verdict') }}{% if case.verdict %} · {{ '%.0f' % (case.verdict.confidence * 100) }}%{% endif %}</span></td>
       <td><strong>{{ {'approve': 'approved', 'edit': 'approved', 'reject': 'rejected', 'delete': 'deleted'}.get(decision.action, decision.action) }}</strong>{% if decision.reason %} ({{ decision.reason }}){% endif %}
         <div class="msg">by {{ decision.by }} on {{ decision.at.strftime('%Y-%m-%d %H:%M') }}</div></td>
