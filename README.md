@@ -605,7 +605,7 @@ blocked.
 
 ### Try it on the demo shop
 
-`examples/demo_shop` is Mosaic Market, a small tile shop with five planted bugs, built to
+`examples/demo_shop` is Mosaic Market, a small tile shop with test personas, a three-step checkout, a 95-test Playwright suite and five planted bugs, built to
 show Tessella end to end and to score it:
 
 | # | Planted bug | Kind | Caught by the suite? |
@@ -631,7 +631,7 @@ uvicorn shop.app:app --port 8765
 
 # terminal 2: see the bugs, run the suite, triage the results
 bash show_bugs.sh                        # reproduces bugs 1, 3, 4, 5 with curl
-bash run_suite.sh                        # 18 tests, 3 planted failures
+bash run_suite.sh                        # 95 tests, 3 planted failures (4 when the flaky one trips)
 tessella triage --no-model --no-rerun    # 3 failures in 3 clusters, with screenshots
 tessella triage                          # re-runs and verdicts (needs a local model)
 tessella queue                           # review the drafts at http://localhost:8484

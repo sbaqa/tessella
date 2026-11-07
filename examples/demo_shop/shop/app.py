@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
 from starlette.routing import Route
 
-from shop.store import ShopError, Store
+from shop.store import PERSONAS, ShopError, Store
 
 STATIC = Path(__file__).parent / "static"
 LOG_PATH = Path(os.environ.get("DEMO_SHOP_LOG", Path(__file__).parent.parent / "logs" / "app.log"))
@@ -90,8 +90,10 @@ async def recommendations(request: Request):
 
 async def login(request: Request):
     body = await _body(request)
-    token = store.login(str(body.get("username", "")), str(body.get("password", "")))
-    return JSONResponse({"token": token, "username": body.get("username")})
+    username = str(body.get("username", ""))
+    token = await run_in_threadpool(store.login, username, str(body.get("password", "")))
+    return JSONResponse({"token": token, "username": username,
+                         "persona": username if username in PERSONAS else None})
 
 
 async def list_orders(request: Request):
@@ -102,7 +104,9 @@ async def list_orders(request: Request):
 async def create_order(request: Request):
     user = _user(request)
     body = await _body(request)
-    order = store.create_order(user, body.get("items") or [], body.get("discount_code"))
+    ship_to = body.get("ship_to") if isinstance(body.get("ship_to"), dict) else None
+    order = await run_in_threadpool(store.create_order, user, body.get("items") or [],
+                                    body.get("discount_code"), ship_to)
     return JSONResponse(order.public(), status_code=201)
 
 

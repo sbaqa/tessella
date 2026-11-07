@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
 <style>
   :root {
+    color-scheme: light;
     --wall: #e4e8e2;      /* limestone wall */
     --grout: #c9cfc6;     /* grout lines between everything */
     --plate: #f7f8f5;     /* glazed plate under text */
@@ -16,264 +17,273 @@
     --muted: #5a6670;
     --lapis: #2546a8;     /* primary action */
     --lapis-deep: #18307a;
-    --ochre: #c48d12;     /* discounts */
+    --ochre: #9a6c06;     /* discounts */
     --verdigris: #17766f; /* success */
     --rust: #a3242c;      /* errors */
+    --field: #ffffff;
     --gap: 10px;          /* the grout width, used as the layout unit */
     --font: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --ease: cubic-bezier(.2, .7, .2, 1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --wall: #12171c; --grout: #2a323a; --plate: #1b2229; --ink: #e8ebe6; --muted: #a2adb6;
+      --lapis: #5a82e8; --lapis-deep: #7b9cf0; --ochre: #e0b44a; --verdigris: #4fc2b9;
+      --rust: #f08a8f; --field: #10151a;
+    }
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  html { -webkit-text-size-adjust: 100%; }
-  body {
-    margin: 0; background: var(--wall); color: var(--ink);
-    font: 400 16px/1.5 var(--font);
-  }
-  button, input { font: inherit; color: inherit; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body { margin: 0; background: var(--wall); color: var(--ink); font: 400 16px/1.5 var(--font); min-height: 100vh; }
+  button, input, select { font: inherit; color: inherit; }
+  a { color: inherit; }
   :focus-visible { outline: 3px solid var(--lapis); outline-offset: 2px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
   /* ---- header ---- */
   .bar {
-    display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    padding: 14px clamp(16px, 4vw, 40px); background: var(--ink); color: var(--plate);
+    position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 14px;
+    padding: 12px clamp(16px, 4vw, 40px); background: #1c2530; color: #f7f8f5;
   }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; letter-spacing: -0.01em; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; letter-spacing: -0.01em; text-decoration: none; }
   .brand-mark { display: grid; grid-template-columns: repeat(2, 9px); gap: 2px; }
   .brand-mark i { width: 9px; height: 9px; display: block; }
-  .brand-mark i:nth-child(1) { background: #2f5fd0; }
-  .brand-mark i:nth-child(2) { background: #c2551b; }
-  .brand-mark i:nth-child(3) { background: #1f8a83; }
-  .brand-mark i:nth-child(4) { background: #d6a21e; }
-  .bar-right { display: flex; align-items: center; gap: 18px; font-size: 15px; }
-  .cart-pill { display: inline-flex; align-items: center; gap: 8px; }
-  .cart-pill b {
-    min-width: 26px; height: 26px; padding: 0 7px; display: inline-grid; place-items: center;
-    background: var(--plate); color: var(--ink); font-weight: 800;
-  }
+  .brand-mark i:nth-child(1) { background: #2f5fd0; } .brand-mark i:nth-child(2) { background: #c2551b; }
+  .brand-mark i:nth-child(3) { background: #1f8a83; } .brand-mark i:nth-child(4) { background: #d6a21e; }
+  .grow { flex: 1; }
+  .who { font-size: 14px; opacity: .85; }
+  .icon-btn { background: transparent; border: 0; color: inherit; cursor: pointer; padding: 8px; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+  .icon-btn:hover { background: rgba(255, 255, 255, .1); }
+  .burger { width: 22px; display: grid; gap: 4px; }
+  .burger i { display: block; height: 2px; background: currentColor; border-radius: 2px; }
+  .badge { min-width: 24px; height: 24px; padding: 0 7px; display: inline-grid; place-items: center; background: #f7f8f5; color: #1c2530; font-weight: 800; font-size: 14px; border-radius: 999px; }
+  .badge[data-empty="true"] { opacity: .45; }
+  @media (prefers-reduced-motion: no-preference) { .badge.bump { animation: bump 320ms var(--ease); } @keyframes bump { 40% { transform: scale(1.35); } } }
 
-  /* ---- hero: a wall being tiled ---- */
-  .hero {
-    display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-    gap: clamp(24px, 5vw, 64px); align-items: center;
-    padding: clamp(28px, 6vw, 72px) clamp(16px, 4vw, 40px) clamp(24px, 4vw, 48px);
-    max-width: 1280px; margin: 0 auto;
+  /* ---- side menu ---- */
+  .scrim { position: fixed; inset: 0; background: rgba(10, 14, 18, .45); z-index: 30; opacity: 0; pointer-events: none; transition: opacity 200ms; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; inset: 0 auto 0 0; width: min(320px, 86vw); background: var(--plate); z-index: 31; transform: translateX(-102%); transition: transform 260ms var(--ease); padding: 18px; display: flex; flex-direction: column; gap: 4px; box-shadow: 8px 0 30px rgba(0, 0, 0, .2); }
+  .drawer.open { transform: none; }
+  .drawer h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 4px 8px 10px; }
+  .drawer a, .drawer button { text-align: left; background: transparent; border: 0; padding: 12px; border-radius: 8px; font-weight: 600; font-size: 17px; cursor: pointer; text-decoration: none; }
+  .drawer a:hover, .drawer button:hover { background: var(--wall); }
+  .drawer .close { align-self: flex-end; font-size: 22px; padding: 6px 10px; }
+
+  /* ---- views ---- */
+  main { max-width: 1200px; margin: 0 auto; padding: clamp(20px, 4vw, 40px) clamp(16px, 4vw, 40px) 72px; }
+  .view { outline: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .view.enter { animation: enter 280ms var(--ease) both; }
+    @keyframes enter { from { opacity: 0; transform: translateY(10px); } }
   }
-  .hero h1 {
-    margin: 0 0 16px; font-weight: 800; letter-spacing: -0.035em; line-height: 0.95;
-    font-size: clamp(42px, 7vw, 92px);
-  }
-  .hero p { margin: 0; max-width: 34em; font-size: 18px; color: var(--muted); }
-  .wall {
-    display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px;
-    padding: 6px; background: var(--grout); aspect-ratio: 3 / 2;
-  }
+  h1 { margin: 0 0 8px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-size: clamp(34px, 5.5vw, 64px); }
+  h2 { margin: 0 0 14px; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+  h3 { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+  .lede { margin: 0 0 24px; color: var(--muted); font-size: 18px; max-width: 36em; }
+  .toolbar { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .steps { display: flex; gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; flex-wrap: wrap; }
+  .steps li { padding: 6px 12px; border-radius: 999px; background: var(--plate); color: var(--muted); font-size: 14px; font-weight: 600; }
+  .steps li[aria-current="step"] { background: var(--lapis); color: #fff; }
+  .steps li.done { color: var(--verdigris); }
+
+  /* ---- sign in ---- */
+  .signin { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 5vw, 56px); align-items: center; min-height: calc(100vh - 220px); }
+  .wall { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 6px; background: var(--grout); aspect-ratio: 3 / 2; border-radius: 4px; }
   .wall span { display: block; }
   @media (prefers-reduced-motion: no-preference) {
-    .wall span { animation: set 520ms cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i) * 38ms); }
+    .wall span { animation: set 520ms var(--ease) both; animation-delay: calc(var(--i) * 34ms); }
     @keyframes set { from { opacity: 0; transform: scale(.6) rotate(-6deg); } }
   }
+  .card { background: var(--plate); padding: clamp(18px, 3vw, 28px); border-radius: 10px; border-top: 6px solid var(--lapis); }
+  .accounts { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--grout); font-size: 14px; color: var(--muted); }
+  .accounts dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 8px 0 0; }
+  .accounts dt { font-family: ui-monospace, Menlo, monospace; color: var(--ink); }
+  .accounts dd { margin: 0; }
+  .accounts button { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; color: var(--lapis); text-decoration: underline; text-underline-offset: 3px; }
 
-  /* ---- main layout ---- */
-  .layout {
-    display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 32px; align-items: start;
-    max-width: 1280px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px) 64px;
+  /* ---- forms ---- */
+  label { display: block; font-size: 14px; font-weight: 600; margin: 12px 0 4px; }
+  input[type=text], input[type=password], select {
+    width: 100%; padding: 11px 12px; background: var(--field); border: 2px solid var(--grout); border-radius: 6px;
+    transition: border-color 120ms;
   }
-  h2 { margin: 0 0 14px; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
-  h3 { margin: 0 0 10px; font-size: 18px; font-weight: 600; }
+  input:focus, select:focus { border-color: var(--lapis); outline: none; }
+  input[aria-invalid="true"] { border-color: var(--rust); }
+  .field-error { color: var(--rust); font-size: 13px; font-weight: 600; margin: 4px 0 0; }
+  .error-box { display: flex; justify-content: space-between; gap: 10px; align-items: start; margin: 14px 0 0; padding: 10px 12px; border-radius: 6px; background: color-mix(in srgb, var(--rust) 14%, transparent); color: var(--rust); font-weight: 600; font-size: 14px; }
+  .error-box button { background: none; border: 0; cursor: pointer; color: inherit; font-size: 18px; line-height: 1; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row.end { justify-content: flex-end; }
+  .sort { min-width: 220px; }
+  .sort select { width: auto; min-width: 220px; }
 
-  /* the catalogue is laid out like tiles on a wall: grout shows between them */
-  .catalogue {
-    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--gap); padding: var(--gap); background: var(--grout);
-  }
-  .tile { background: var(--plate); display: flex; flex-direction: column; }
-  .swatch { aspect-ratio: 1; }
-  .tile-body { padding: 14px 14px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
-  .tile-name { font-weight: 600; font-size: 17px; line-height: 1.2; }
-  .tile-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: auto; }
-  .price { font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
-  .per { color: var(--muted); font-size: 13px; }
-
-  .btn {
-    border: 0; cursor: pointer; padding: 10px 16px; font-weight: 600;
-    background: var(--lapis); color: #fff; border-radius: 2px;
-  }
+  .btn { border: 0; cursor: pointer; padding: 11px 18px; font-weight: 600; background: var(--lapis); color: #fff; border-radius: 6px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: background 120ms, transform 120ms; }
   .btn:hover { background: var(--lapis-deep); }
-  .btn:disabled { background: var(--grout); color: var(--muted); cursor: not-allowed; }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { background: var(--grout); color: var(--muted); cursor: progress; }
   .btn.quiet { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
   .btn.quiet:hover { background: var(--ink); color: var(--plate); }
-  .btn.danger { background: transparent; color: var(--rust); box-shadow: inset 0 0 0 2px var(--rust); }
-  .btn.danger:hover { background: var(--rust); color: #fff; }
-  .btn.small { padding: 6px 12px; font-size: 14px; }
+  .btn.remove { background: transparent; color: var(--rust); box-shadow: inset 0 0 0 2px var(--rust); }
+  .btn.remove:hover { background: var(--rust); color: #fff; }
+  .btn.small { padding: 7px 12px; font-size: 14px; }
   .btn.wide { width: 100%; }
+  .link { background: none; border: 0; padding: 0; cursor: pointer; color: var(--lapis); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 
-  /* ---- side panels ---- */
-  aside { display: flex; flex-direction: column; gap: var(--gap); position: sticky; top: 16px; }
-  .panel { background: var(--plate); padding: 18px; border-top: 6px solid var(--ink); }
-  .panel.cart { border-top-color: var(--lapis); }
-  .panel.orders { border-top-color: var(--verdigris); }
-  label { display: block; font-size: 14px; font-weight: 600; margin: 10px 0 4px; }
-  input[type=text], input[type=password] {
-    width: 100%; padding: 9px 10px; background: #fff; border: 2px solid var(--grout); border-radius: 2px;
-  }
-  input:focus { border-color: var(--lapis); outline: none; }
-  .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
-  .nw { white-space: nowrap; }
-  .signed-in { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  /* ---- catalogue: tiles on a wall, grout between them ---- */
+  .catalogue { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); padding: var(--gap); background: var(--grout); border-radius: 4px; }
+  .tile { background: var(--plate); display: flex; flex-direction: column; }
+  .swatch { aspect-ratio: 1; display: block; }
+  .catalogue .swatch { aspect-ratio: 4 / 3; }
+  .filters { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+  .filters input { min-width: 220px; }
+  .toast button { margin-left: 14px; background: none; border: 0; color: inherit; font: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  a.swatch { transition: filter 160ms; } a.swatch:hover { filter: brightness(1.08); }
+  .tile-body { padding: 14px 14px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .tile-name { font-weight: 600; font-size: 17px; line-height: 1.2; text-decoration: none; }
+  .tile-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .tile-desc { color: var(--muted); font-size: 14px; margin: 0; }
+  .tile-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: auto; padding-top: 6px; }
+  .price { font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .per { color: var(--muted); font-size: 13px; font-weight: 400; }
 
-  .lines { list-style: none; margin: 0; padding: 0; }
-  .lines li {
-    display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center;
-    padding: 8px 0; border-bottom: 1px solid var(--grout);
-  }
-  .lines .chip { width: 28px; height: 28px; }
-  .qty { display: inline-flex; align-items: center; gap: 6px; }
-  .qty button { width: 26px; height: 26px; border: 0; background: var(--wall); cursor: pointer; font-weight: 800; }
-  .sum { display: flex; justify-content: space-between; margin: 12px 0 0; font-weight: 600; }
-  .sum.total { font-size: 20px; font-weight: 800; }
-  .sum .save { color: var(--ochre); }
+  /* ---- product page ---- */
+  .detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(20px, 5vw, 56px); align-items: start; }
+  .detail .swatch { border-radius: 6px; }
+  .detail .price { font-size: 30px; display: block; margin: 16px 0; }
+
+  /* ---- cart and checkout ---- */
+  .lines { list-style: none; margin: 0 0 18px; padding: 0; background: var(--plate); border-radius: 10px; }
+  .lines li { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 14px; border-bottom: 1px solid var(--grout); }
+  .lines li:last-child { border-bottom: 0; }
+  .chip { width: 64px; height: 64px; border-radius: 4px; display: block; }
+  .line-name { font-weight: 600; text-decoration: none; }
+  .line-sub { color: var(--muted); font-size: 14px; margin: 2px 0 0; }
+  .qty { display: inline-flex; align-items: center; gap: 4px; background: var(--wall); border-radius: 999px; padding: 3px; }
+  .qty button { width: 30px; height: 30px; border: 0; background: var(--plate); border-radius: 999px; cursor: pointer; font-weight: 800; }
+  .qty output { min-width: 26px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .two { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); gap: 24px; align-items: start; }
+  .summary { background: var(--plate); border-radius: 10px; padding: 18px; position: sticky; top: 84px; }
+  .sum { display: flex; justify-content: space-between; margin: 8px 0 0; font-variant-numeric: tabular-nums; }
+  .sum.total { font-size: 22px; font-weight: 800; padding-top: 10px; margin-top: 12px; border-top: 2px solid var(--grout); }
+  .sum .save { color: var(--ochre); font-weight: 600; }
+  .info { margin: 0 0 12px; }
+  .info dt { color: var(--muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .info dd { margin: 2px 0 10px; font-weight: 600; }
   .discount-row { display: flex; gap: 8px; align-items: end; }
-  .discount-row div { flex: 1; }
-  .empty { color: var(--muted); margin: 4px 0 0; }
+  .discount-row > div { flex: 1; }
+  .empty-state { background: var(--plate); border-radius: 10px; padding: 32px; text-align: center; color: var(--muted); }
+  .empty-state p { margin: 0 0 14px; }
+  .done-card { background: var(--plate); border-radius: 10px; padding: clamp(24px, 5vw, 48px); text-align: center; max-width: 640px; margin: 0 auto; border-top: 6px solid var(--verdigris); }
+  .done-card .tick { width: 72px; height: 72px; border-radius: 999px; background: var(--verdigris); color: #fff; display: grid; place-items: center; font-size: 38px; margin: 0 auto 16px; }
 
-  .order { padding: 12px 0; border-bottom: 1px solid var(--grout); }
-  .order:last-child { border-bottom: 0; }
-  .order-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .order-items { color: var(--muted); font-size: 14px; margin: 4px 0 8px; }
+  /* ---- orders ---- */
+  .order { background: var(--plate); border-radius: 10px; padding: 16px; margin-bottom: 10px; }
+  .order-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .order-items { color: var(--muted); font-size: 14px; margin: 6px 0 10px; }
   .order-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .status { font-size: 13px; font-weight: 600; padding: 2px 8px; background: var(--wall); }
-  .status[data-s=paid] { background: #dbe4fb; color: var(--lapis-deep); }
-  .status[data-s=shipped] { background: #d6efec; color: var(--verdigris); }
-  .status[data-s=cancelled] { background: #f3dcdd; color: var(--rust); }
-  .refund { font-size: 13px; color: var(--verdigris); }
+  .status { font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--wall); }
+  .status[data-s=paid] { background: color-mix(in srgb, var(--lapis) 18%, transparent); color: var(--lapis-deep); }
+  .status[data-s=shipped] { background: color-mix(in srgb, var(--verdigris) 18%, transparent); color: var(--verdigris); }
+  .status[data-s=cancelled] { background: color-mix(in srgb, var(--rust) 16%, transparent); color: var(--rust); }
+  .refund { font-size: 13px; color: var(--verdigris); font-weight: 600; }
 
   /* ---- recommendations ---- */
   .picks { margin-top: 40px; }
   .picks-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }
-  .pick { background: var(--plate); display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; padding: 10px; }
-  .pick .chip { width: 64px; height: 64px; }
+  .pick { background: var(--plate); display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; padding: 10px; border-radius: 6px; text-decoration: none; }
   .pick.loading .chip, .pick.loading .ph { background: var(--grout); }
-  .ph { height: 12px; width: 70%; }
+  .ph { height: 12px; width: 70%; border-radius: 4px; }
   @media (prefers-reduced-motion: no-preference) {
     .pick.loading { animation: pulse 1.1s ease-in-out infinite alternate; }
     @keyframes pulse { to { opacity: .5; } }
   }
 
   /* ---- toast ---- */
-  .toast {
-    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-    max-width: min(560px, calc(100vw - 32px)); padding: 14px 18px; z-index: 10;
-    background: var(--ink); color: var(--plate); font-weight: 600;
-    border-left: 8px solid var(--verdigris); box-shadow: 0 10px 30px rgba(28, 37, 48, .25);
-  }
-  .toast.error { background: #fff; color: var(--rust); border-left-color: var(--rust); box-shadow: 0 0 0 2px var(--rust), 0 10px 30px rgba(163, 36, 44, .25); }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: min(560px, calc(100vw - 32px)); padding: 14px 18px; z-index: 40; background: #1c2530; color: #f7f8f5; font-weight: 600; border-left: 8px solid #4fc2b9; border-radius: 6px; box-shadow: 0 10px 30px rgba(28, 37, 48, .3); }
+  .toast.error { background: #fff; color: #a3242c; border-left-color: #a3242c; box-shadow: 0 0 0 2px #a3242c, 0 10px 30px rgba(163, 36, 44, .25); }
   @media (prefers-reduced-motion: no-preference) {
     .toast:not([hidden]) { animation: rise 240ms ease-out; }
     @keyframes rise { from { opacity: 0; transform: translate(-50%, 12px); } }
   }
-
   footer { text-align: center; color: var(--muted); font-size: 13px; padding: 0 16px 40px; }
 
-  @media (max-width: 980px) {
-    .layout { grid-template-columns: 1fr; }
-    aside { position: static; }
+  /* ---- persona quirks (visual user) ---- */
+  body[data-persona=visual] [data-testid=product-1] .swatch { transform: rotate(7deg); }
+  body[data-persona=visual] [data-testid=add-6] { margin-left: 40px; }
+  body[data-persona=visual] .bar .badge { transform: translate(-14px, 10px); }
+
+  @media (max-width: 900px) {
+    .two, .detail { grid-template-columns: 1fr; }
+    .summary { position: static; }
   }
   @media (max-width: 720px) {
-    .hero { grid-template-columns: 1fr; }
+    .signin { grid-template-columns: 1fr; min-height: 0; }
     .catalogue { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .picks-row { grid-template-columns: 1fr; }
-    .bar-right .who { display: none; }
+    .who { display: none; }
+    .lines li { grid-template-columns: 56px minmax(0, 1fr); }
+    .lines li > :nth-child(3), .lines li > :nth-child(4) { grid-column: 2; justify-self: start; }
+    .chip { width: 56px; height: 56px; }
   }
-  @media (max-width: 340px) {
-    .catalogue { grid-template-columns: 1fr; }
-  }
+  @media (max-width: 380px) { .catalogue { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <header class="bar">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Mosaic Market</div>
-  <div class="bar-right">
-    <span class="who" id="who">Not signed in</span>
-    <a class="cart-pill" href="#cart" style="color:inherit;text-decoration:none">Cart <b data-testid="cart-count" id="cart-count">0</b></a>
-  </div>
+  <button class="icon-btn" id="menu-button" data-testid="menu-button" type="button" aria-controls="drawer" aria-expanded="false" hidden>
+    <span class="burger" aria-hidden="true"><i></i><i></i><i></i></span><span class="sr-only">Open menu</span>
+  </button>
+  <a class="brand" href="#/inventory"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Mosaic Market</a>
+  <span class="grow"></span>
+  <span class="who" id="who">Not signed in</span>
+  <a class="icon-btn" id="cart-link" href="#/cart" data-testid="cart-link" hidden>
+    <span>Cart</span><span class="badge" data-testid="cart-count" id="cart-count" data-empty="true">0</span>
+  </a>
 </header>
 
-<section class="hero">
-  <div>
-    <h1>Glazed tiles, sold by the sheet.</h1>
-    <p>Six patterns, each mounted on a 30 cm sheet ready to set. Order a few sheets to try a colour, or enough for a whole wall.</p>
-  </div>
-  <div class="wall" id="wall" aria-hidden="true"></div>
-</section>
+<div class="scrim" id="scrim"></div>
+<nav class="drawer" id="drawer" aria-label="Menu" aria-hidden="true" inert>
+  <button class="close" id="menu-close" type="button" aria-label="Close menu">&times;</button>
+  <h2>Menu</h2>
+  <a href="#/inventory" data-testid="menu-all-items">All patterns</a>
+  <a href="#/orders" data-testid="menu-orders">My orders</a>
+  <a href="#/about" data-testid="menu-about">About</a>
+  <button type="button" id="menu-reset" data-testid="menu-reset">Reset app state</button>
+  <button type="button" id="menu-logout" data-testid="menu-logout">Log out</button>
+</nav>
 
-<div class="layout">
-  <main>
-    <h2>Patterns</h2>
-    <div class="catalogue" id="catalogue" aria-live="polite"></div>
-
-    <section class="picks" aria-labelledby="picks-title">
-      <h2 id="picks-title">Picked for you</h2>
-      <div class="picks-row" id="picks" data-testid="recommendations"></div>
-    </section>
-  </main>
-
-  <aside>
-    <section class="panel" id="account" aria-labelledby="account-title">
-      <h3 id="account-title">Your account</h3>
-      <form id="login-form" autocomplete="off">
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username" required>
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" required>
-        <p class="hint">Demo accounts: <span class="nw">anna / anna-pass</span> and <span class="nw">bob / bob-pass</span>.</p>
-        <button class="btn wide" id="sign-in" type="submit" style="margin-top:12px">Sign in</button>
-      </form>
-      <div class="signed-in" id="signed-in" hidden>
-        <span>Signed in as <b id="signed-in-name"></b></span>
-        <button class="btn quiet small" id="sign-out" type="button">Sign out</button>
-      </div>
-    </section>
-
-    <section class="panel cart" id="cart" aria-labelledby="cart-title">
-      <h3 id="cart-title">Cart</h3>
-      <ul class="lines" id="cart-lines"></ul>
-      <p class="empty" id="cart-empty">Your cart is empty. Add a pattern to start an order.</p>
-      <div id="cart-totals" hidden>
-        <div class="discount-row">
-          <div>
-            <label for="discount">Discount code</label>
-            <input type="text" id="discount" data-testid="discount" placeholder="MOSAIC10">
-          </div>
-        </div>
-        <p class="sum"><span>Subtotal</span><span id="subtotal"></span></p>
-        <p class="sum total"><span>Total</span><span id="total"></span></p>
-        <button class="btn wide" id="checkout" data-testid="checkout" type="button" style="margin-top:12px">Place order</button>
-      </div>
-    </section>
-
-    <section class="panel orders" aria-labelledby="orders-title">
-      <h3 id="orders-title">Your orders</h3>
-      <div id="orders"></div>
-      <p class="empty" id="orders-empty">Sign in to see your orders.</p>
-    </section>
-  </aside>
-</div>
+<main id="app" aria-live="polite"></main>
 
 <footer>Mosaic Market is a demo shop for testing Tessella. Nothing here is for sale.</footer>
-
 <div class="toast" id="toast" data-testid="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
 (() => {
-  const state = { token: null, user: null, products: [], byId: {}, cart: new Map(), orders: [] };
-  const DISCOUNTS = { MOSAIC10: 0.10, TILE25: 0.25 };  // shown as a preview; the server decides
+  const ACCOUNTS = [
+    ["anna", "anna-pass", "a regular customer"], ["bob", "bob-pass", "another customer"],
+    ["standard", "mosaic-pass", "everything works"], ["locked", "mosaic-pass", "cannot sign in"],
+    ["problem", "mosaic-pass", "a broken shop"], ["slow", "mosaic-pass", "slow sign-in"],
+    ["error", "mosaic-pass", "actions fail"], ["visual", "mosaic-pass", "layout glitches"],
+  ];
+  const DISCOUNTS = { MOSAIC10: 0.10, TILE25: 0.25 };  // a preview; the server decides
+  const SORTS = { az: "Name (A to Z)", za: "Name (Z to A)", lohi: "Price (low to high)", hilo: "Price (high to low)" };
+  const state = { token: null, user: null, persona: null, products: [], byId: {}, cart: new Map(),
+                  sort: "az", query: "", info: null, code: "", orders: [] };
   const $ = (id) => document.getElementById(id);
+  const app = $("app");
   const money = (cents) => "$" + (cents / 100).toFixed(2);
+  const roundEven = (x) => { const f = Math.floor(x), d = x - f; return d > 0.5 || (d === 0.5 && f % 2) ? f + 1 : f; };
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+    del(k) { try { localStorage.removeItem(k); } catch {} },
+  };
 
-  class ApiError extends Error {
-    constructor(status, message) { super(message); this.status = status; }
-  }
-
+  class ApiError extends Error { constructor(status, message) { super(message); this.status = status; } }
   async function api(path, { method = "GET", body } = {}) {
     const headers = { "content-type": "application/json" };
     if (state.token) headers.authorization = "Bearer " + state.token;
@@ -286,238 +296,435 @@
   }
 
   let toastTimer;
-  function toast(message, kind = "ok") {
+  function toast(message, kind = "ok", undo = null) {
     const el = $("toast");
     el.textContent = message;
+    if (undo) {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = "Undo"; b.dataset.testid = "undo";
+      b.setAttribute("data-testid", "undo");
+      b.addEventListener("click", () => { el.hidden = true; undo(); });
+      el.appendChild(b);
+    }
     el.className = "toast" + (kind === "error" ? " error" : "");
     el.dataset.kind = kind;
     el.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { el.hidden = true; }, kind === "error" ? 9000 : 4000);
   }
+  const describe = (err) => err instanceof ApiError ? `The server answered ${err.status}: ${err.message}`
+                                                     : "The shop could not be reached. Check that it is running.";
+  const quirk = (name) => state.persona === name;
 
-  function describe(err) {
-    if (err instanceof ApiError) return `The server answered ${err.status}: ${err.message}`;
-    return "The shop could not be reached. Check that it is running.";
+  // ---- session and cart, kept across reloads ----
+  function saveSession() {
+    if (state.token) store.set("mm-session", { token: state.token, user: state.user, persona: state.persona });
+    else store.del("mm-session");
+  }
+  function saveCart() {
+    if (state.user) store.set("mm-cart-" + state.user, [...state.cart]);
+    updateBadge(true);
+  }
+  function loadCart() { state.cart = new Map(store.get("mm-cart-" + state.user) || []); updateBadge(false); }
+  const cartCount = () => [...state.cart.values()].reduce((a, b) => a + b, 0);
+  function updateBadge(bump) {
+    const b = $("cart-count"), n = cartCount();
+    b.textContent = String(n); b.dataset.empty = String(n === 0);
+    if (bump) { b.classList.remove("bump"); void b.offsetWidth; b.classList.add("bump"); }
+  }
+  function setCart(id, qty) {
+    if (qty <= 0) state.cart.delete(id); else state.cart.set(id, Math.min(qty, 20));
+    saveCart();
   }
 
-  // ---- hero wall ----
-  function buildWall() {
-    const wall = $("wall");
+  // ---- chrome: header and menu ----
+  function chrome() {
+    const signed = !!state.token;
+    $("menu-button").hidden = !signed;
+    $("cart-link").hidden = !signed;
+    $("who").textContent = signed ? `Signed in as ${state.user}` : "Not signed in";
+    document.body.dataset.persona = state.persona || "";
+  }
+  function menu(open) {
+    $("drawer").classList.toggle("open", open); $("scrim").classList.toggle("open", open);
+    $("drawer").setAttribute("aria-hidden", String(!open));
+    $("drawer").inert = !open;
+    $("menu-button").setAttribute("aria-expanded", String(open));
+    if (open) $("menu-close").focus(); else if (state.token) $("menu-button").focus();
+  }
+  $("menu-button").addEventListener("click", () => menu(true));
+  $("menu-close").addEventListener("click", () => menu(false));
+  $("scrim").addEventListener("click", () => menu(false));
+  $("drawer").addEventListener("click", (e) => { if (e.target.closest("a")) menu(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") menu(false); });
+  $("menu-reset").addEventListener("click", () => {
+    state.cart.clear(); state.info = null; state.code = ""; saveCart(); menu(false);
+    toast("App state reset: your cart is empty."); route();
+  });
+  $("menu-logout").addEventListener("click", () => {
+    state.token = state.user = state.persona = null; state.cart = new Map(); saveSession(); menu(false);
+    chrome(); updateBadge(false); location.hash = "#/login";
+  });
+
+  // ---- views ----
+  function show(html, title) {
+    app.innerHTML = `<div class="view enter" tabindex="-1">${html}</div>`;
+    document.title = title ? `${title} · Mosaic Market` : "Mosaic Market";
+    const v = app.firstElementChild;
+    requestAnimationFrame(() => v.focus({ preventScroll: true }));
+    window.scrollTo({ top: 0 });
+    return v;
+  }
+  const art = (p) => quirk("problem") ? state.products[0].art : p.art;  // problem user: one image everywhere
+  const shownPrice = (p) => quirk("visual") && p.id === 3 ? p.price - 360 : p.price;  // visual user: a wrong price
+
+  function viewLogin() {
     const order = [0, 3, 1, 5, 2, 4, 3, 0, 4, 1, 5, 2, 1, 4, 0, 2, 5, 3, 2, 5, 3, 0, 1, 4];
-    wall.innerHTML = order.map((p, i) =>
-      `<span style="--i:${i};background:${state.products[p].art}"></span>`).join("");
-  }
-
-  // ---- catalogue ----
-  function renderCatalogue() {
-    $("catalogue").innerHTML = state.products.map((p) => `
-      <article class="tile" data-testid="product-${p.id}">
-        <div class="swatch" style="background:${p.art}" role="img" aria-label="${p.name} tile sample"></div>
-        <div class="tile-body">
-          <div class="tile-name">${p.name}</div>
-          <div class="tile-meta"><span class="price">${money(p.price)}</span><span class="per">per sheet</span></div>
-          <button class="btn quiet" type="button" data-add="${p.id}" data-testid="add-${p.id}">Add to cart</button>
+    const v = show(`
+      <section class="signin">
+        <div>
+          <h1>Glazed tiles, sold by the sheet.</h1>
+          <p class="lede">Six patterns, each mounted on a 30 cm sheet ready to set. Sign in to browse and order.</p>
+          <div class="wall" aria-hidden="true">${order.map((p, i) => `<span style="--i:${i};background:${state.products[p] ? state.products[p].art : "#ccc"}"></span>`).join("")}</div>
         </div>
-      </article>`).join("");
+        <div class="card">
+          <h2>Sign in</h2>
+          <form id="login-form" autocomplete="off" novalidate>
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" autocapitalize="off" spellcheck="false">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password">
+            <div class="error-box" id="login-error" data-testid="login-error" role="alert" hidden><span></span><button type="button" aria-label="Dismiss">&times;</button></div>
+            <button class="btn wide" id="sign-in" type="submit" style="margin-top:16px">Sign in</button>
+          </form>
+          <div class="accounts">
+            <strong>Test accounts</strong> (select one to fill the form)
+            <dl>${ACCOUNTS.map(([u, pw, what]) => `<dt><button type="button" data-fill="${u}" data-pw="${pw}">${u}</button></dt><dd>${what}</dd>`).join("")}</dl>
+            <p style="margin:10px 0 0">Personas share the password <code>mosaic-pass</code>.</p>
+          </div>
+        </div>
+      </section>`, "Sign in");
+    const err = v.querySelector("#login-error");
+    const fail = (msg) => { err.querySelector("span").textContent = msg; err.hidden = false; v.querySelectorAll("input").forEach((i) => i.setAttribute("aria-invalid", "true")); };
+    err.querySelector("button").addEventListener("click", () => { err.hidden = true; v.querySelectorAll("input").forEach((i) => i.removeAttribute("aria-invalid")); });
+    v.querySelectorAll("[data-fill]").forEach((b) => b.addEventListener("click", () => {
+      v.querySelector("#username").value = b.dataset.fill; v.querySelector("#password").value = b.dataset.pw; v.querySelector("#sign-in").focus();
+    }));
+    v.querySelector("#login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const username = v.querySelector("#username").value.trim(), password = v.querySelector("#password").value;
+      if (!username) return fail("Username is required");
+      if (!password) return fail("Password is required");
+      const btn = v.querySelector("#sign-in");
+      btn.disabled = true; btn.textContent = "Signing in…";
+      try {
+        const res = await api("/api/auth/login", { method: "POST", body: { username, password } });
+        state.token = res.token; state.user = res.username; state.persona = res.persona;
+        saveSession(); loadCart(); chrome();
+        location.hash = "#/inventory";
+      } catch (ex) {
+        fail(ex instanceof ApiError ? ex.message : describe(ex));
+        btn.disabled = false; btn.textContent = "Sign in";
+      }
+    });
   }
 
-  // ---- recommendations (slow on purpose, server side) ----
-  async function loadPicks() {
-    const row = $("picks");
-    row.innerHTML = Array.from({ length: 3 }, () =>
-      `<div class="pick loading"><span class="chip"></span><span class="ph"></span></div>`).join("");
+  function cartButton(p) {
+    const inCart = state.cart.has(p.id);
+    return inCart
+      ? `<button class="btn remove small" type="button" data-remove="${p.id}" data-testid="remove-${p.id}">Remove</button>`
+      : `<button class="btn quiet small" type="button" data-add="${p.id}" data-testid="add-${p.id}">Add to cart</button>`;
+  }
+  function bindCartButtons(root, rerender) {
+    root.addEventListener("click", (e) => {
+      const add = e.target.closest("[data-add]"), rem = e.target.closest("[data-remove]");
+      if (add) {
+        const id = +add.dataset.add;
+        if (quirk("problem") && id % 2 === 0) return;  // problem user: some buttons do nothing
+        setCart(id, (state.cart.get(id) || 0) + 1); rerender();
+      } else if (rem) {
+        if (quirk("error")) { console.error("Failed to remove item from cart."); toast("Sorry, that item could not be removed.", "error"); return; }
+        const id = +rem.dataset.remove, had = state.cart.get(id) || 1;
+        setCart(id, 0); rerender();
+        toast(`${state.byId[id].name} removed from your cart.`, "ok", () => { setCart(id, had); route(); });
+      }
+    });
+  }
+  function sorted() {
+    const q = state.query.trim().toLowerCase();
+    const list = state.products.filter((p) => !q || p.name.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q));
+    if (quirk("problem")) return list;  // problem user: sorting does nothing
+    const by = { az: (a, b) => a.name.localeCompare(b.name), za: (a, b) => b.name.localeCompare(a.name),
+                 lohi: (a, b) => a.price - b.price, hilo: (a, b) => b.price - a.price }[state.sort];
+    return list.sort(by);
+  }
+
+  function viewInventory() {
+    const v = show(`
+      <div class="toolbar">
+        <div><h1>Glazed tiles, sold by the sheet.</h1><p class="lede" style="margin:0">Six patterns on 30 cm sheets. Prices are per sheet and include VAT.</p></div>
+        <div class="filters">
+          <div><label for="search">Search</label><input type="text" id="search" data-testid="search" placeholder="blue, marble, round…" value="${esc(state.query)}"></div>
+          <div class="sort"><label for="sort">Sort</label><select id="sort" data-testid="sort">${Object.entries(SORTS).map(([k, t]) => `<option value="${k}"${k === state.sort ? " selected" : ""}>${t}</option>`).join("")}</select></div>
+        </div>
+      </div>
+      <h2 class="sr-only">Patterns</h2>
+      <div class="catalogue" id="catalogue"></div>
+      <section class="picks" aria-labelledby="picks-title">
+        <h2 id="picks-title">Picked for you</h2>
+        <div class="picks-row" id="picks" data-testid="recommendations"></div>
+      </section>`, "Patterns");
+    const grid = v.querySelector("#catalogue");
+    const draw = () => {
+      const list = sorted();
+      if (!list.length) { grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1" data-testid="no-results"><p>No pattern matches &ldquo;${esc(state.query)}&rdquo;.</p><button class="btn quiet" type="button" id="clear-search">Clear the search</button></div>`; return; }
+      grid.innerHTML = list.map((p) => `
+        <article class="tile" data-testid="product-${p.id}">
+          <a class="swatch" href="#/product/${p.id}" style="background:${art(p)}" aria-label="${esc(p.name)}, see details"></a>
+          <div class="tile-body">
+            <a class="tile-name" href="#/product/${p.id}" data-testid="name-${p.id}">${esc(p.name)}</a>
+            <p class="tile-desc">${esc(p.desc)}</p>
+            <div class="tile-meta"><span class="price" data-testid="price-${p.id}">${money(shownPrice(p))} <span class="per">/ sheet</span></span>${cartButton(p)}</div>
+          </div>
+        </article>`).join("");
+    };
+    draw();
+    bindCartButtons(grid, draw);
+    v.querySelector("#sort").addEventListener("change", (e) => { state.sort = e.target.value; store.set("mm-sort", state.sort); draw(); });
+    v.querySelector("#search").addEventListener("input", (e) => { state.query = e.target.value; draw(); });
+    grid.addEventListener("click", (e) => { if (e.target.id === "clear-search") { state.query = ""; v.querySelector("#search").value = ""; draw(); v.querySelector("#search").focus(); } });
+    loadPicks(v.querySelector("#picks"));
+  }
+
+  async function loadPicks(row) {
+    row.innerHTML = Array.from({ length: 3 }, () => `<div class="pick loading"><span class="chip"></span><span class="ph"></span></div>`).join("");
     try {
       const picks = await api("/api/recommendations");
-      row.innerHTML = picks.map((p) => `
-        <div class="pick"><span class="chip" style="background:${p.art}"></span>
-          <span><b>${p.name}</b><br><span class="per">${money(p.price)} per sheet</span></span></div>`).join("");
-    } catch (err) {
-      row.innerHTML = `<p class="empty">Suggestions are unavailable right now. ${describe(err)}</p>`;
-    }
+      row.innerHTML = picks.map((p) => `<a class="pick" href="#/product/${p.id}"><span class="chip" style="background:${art(p)}"></span><span><b>${esc(p.name)}</b><br><span class="per">${money(shownPrice(p))} a sheet</span></span></a>`).join("");
+    } catch { row.innerHTML = `<p class="per">Recommendations are not available right now.</p>`; }
   }
 
-  // ---- cart ----
-  function cartCount() { let n = 0; state.cart.forEach((q) => { n += q; }); return n; }
-
-  function cartSubtotal() {
-    let s = 0; state.cart.forEach((q, id) => { s += state.byId[id].price * q; }); return s;
-  }
-
-  function renderCart() {
-    $("cart-count").textContent = cartCount();
-    const lines = [];
-    state.cart.forEach((qty, id) => {
-      const p = state.byId[id];
-      lines.push(`<li data-testid="cart-line-${id}">
-        <span class="chip" style="background:${p.art}"></span>
-        <span>${p.name}<br><span class="per">${money(p.price)} each</span></span>
-        <span class="qty">
-          <button type="button" data-dec="${id}" aria-label="One less ${p.name}">−</button>
-          <b>${qty}</b>
-          <button type="button" data-inc="${id}" aria-label="One more ${p.name}">+</button>
-        </span></li>`);
-    });
-    $("cart-lines").innerHTML = lines.join("");
-    const has = state.cart.size > 0;
-    $("cart-empty").hidden = has;
-    $("cart-totals").hidden = !has;
-    if (!has) return;
-    const sub = cartSubtotal();
-    const code = $("discount").value.trim().toUpperCase();
-    const rate = DISCOUNTS[code] || 0;
-    $("subtotal").textContent = money(sub);
-    $("total").innerHTML = rate
-      ? `<span class="save">${money(Math.round(sub * (1 - rate)))}</span>`
-      : money(sub);
-  }
-
-  function changeQty(id, delta) {
-    const next = (state.cart.get(id) || 0) + delta;
-    if (next <= 0) state.cart.delete(id);
-    else state.cart.set(id, Math.min(next, 20));
-    renderCart();
-  }
-
-  // ---- account ----
-  function renderAccount() {
-    const signedIn = Boolean(state.token);
-    $("login-form").hidden = signedIn;
-    $("signed-in").hidden = !signedIn;
-    $("signed-in-name").textContent = state.user || "";
-    $("who").textContent = signedIn ? `Signed in as ${state.user}` : "Not signed in";
-  }
-
-  async function signIn(event) {
-    event.preventDefault();
-    const username = $("username").value.trim();
-    const password = $("password").value;
-    try {
-      const data = await api("/api/auth/login", { method: "POST", body: { username, password } });
-      state.token = data.token;
-      state.user = data.username;
-      $("password").value = "";
-      renderAccount();
-      toast(`Signed in as ${state.user}`);
-      await loadOrders();
-    } catch (err) {
-      toast(err.status === 401 ? "Wrong username or password. Try anna / anna-pass." : describe(err), "error");
-    }
-  }
-
-  function signOut() {
-    state.token = null; state.user = null; state.orders = [];
-    renderAccount(); renderOrders();
-    toast("Signed out");
-  }
-
-  // ---- orders ----
-  async function loadOrders() {
-    if (!state.token) { state.orders = []; renderOrders(); return; }
-    try {
-      state.orders = await api("/api/orders");
-    } catch (err) {
-      toast(`Couldn't load your orders. ${describe(err)}`, "error");
-    }
-    renderOrders();
-  }
-
-  function renderOrders() {
-    const box = $("orders");
-    const empty = $("orders-empty");
-    if (!state.token) { box.innerHTML = ""; empty.textContent = "Sign in to see your orders."; empty.hidden = false; return; }
-    if (!state.orders.length) { box.innerHTML = ""; empty.textContent = "No orders yet. Place one from your cart."; empty.hidden = false; return; }
-    empty.hidden = true;
-    box.innerHTML = state.orders.slice().reverse().map((o) => {
-      const items = o.items.map((i) => `${i.qty} × ${i.name}`).join(", ");
-      const canPay = o.status === "created";
-      const canCancel = o.status === "created" || o.status === "paid";
-      return `<div class="order" data-testid="order-${o.id}">
-        <div class="order-head">
-          <b>Order ${o.id}</b>
-          <span class="status" data-s="${o.status}" data-testid="status-${o.id}">${o.status}</span>
+  function viewProduct(id) {
+    const p = state.byId[id];
+    if (!p) { location.hash = "#/inventory"; return; }
+    const v = show(`
+      <p><a class="link" href="#/inventory" data-testid="back-to-products">&larr; Back to patterns</a></p>
+      <div class="detail" data-testid="product-detail">
+        <div class="swatch" style="background:${art(p)}" role="img" aria-label="${esc(p.name)} tile sample"></div>
+        <div>
+          <h1>${esc(p.name)}</h1>
+          <p class="lede" style="margin:0">${esc(p.desc)}</p>
+          <span class="price">${money(shownPrice(p))} <span class="per">per sheet, VAT included</span></span>
+          <div id="buy"></div>
         </div>
-        <div class="order-items">${items}<br>${money(o.total)}${o.discount_code ? ` with ${o.discount_code}` : ""}</div>
-        <div class="order-actions">
-          ${canPay ? `<button class="btn small" type="button" data-pay="${o.id}" data-testid="pay-${o.id}">Pay ${money(o.total)}</button>` : ""}
-          ${canCancel ? `<button class="btn danger small" type="button" data-cancel="${o.id}" data-testid="cancel-${o.id}">Cancel order</button>` : ""}
-          ${o.refunded ? `<span class="refund">Refunded ${money(o.refunded)}</span>` : ""}
-        </div>
-      </div>`;
+      </div>`, p.name);
+    const buy = v.querySelector("#buy");
+    const draw = () => { buy.innerHTML = cartButton(p).replace("small", ""); };
+    draw(); bindCartButtons(buy, draw);
+  }
+
+  function cartLines(editable) {
+    return [...state.cart].map(([id, qty]) => {
+      const p = state.byId[id]; if (!p) return "";
+      return `<li data-testid="cart-line-${id}">
+        <span class="chip" style="background:${art(p)}"></span>
+        <div><a class="line-name" href="#/product/${id}">${esc(p.name)}</a><p class="line-sub">${money(p.price)} a sheet</p></div>
+        ${editable ? `<span class="qty"><button type="button" data-dec="${id}" aria-label="One fewer ${esc(p.name)}">&minus;</button><output data-testid="qty-${id}">${qty}</output><button type="button" data-inc="${id}" aria-label="One more ${esc(p.name)}">+</button></span>
+                     <button class="btn remove small" type="button" data-remove="${id}" data-testid="remove-${id}">Remove</button>`
+                   : `<span class="per">${qty} &times;</span><b>${money(p.price * qty)}</b>`}
+      </li>`;
     }).join("");
   }
+  const subtotal = () => [...state.cart].reduce((s, [id, q]) => s + (state.byId[id] ? state.byId[id].price * q : 0), 0);
 
-  async function placeOrder() {
-    if (!state.token) {
-      toast("Sign in to place an order.", "error");
-      $("username").focus();
-      return;
-    }
-    const items = [];
-    state.cart.forEach((qty, id) => items.push({ product_id: id, qty }));
-    const code = $("discount").value.trim();
-    const btn = $("checkout");
-    btn.disabled = true;
-    try {
-      const order = await api("/api/orders", { method: "POST", body: { items, discount_code: code || null } });
-      state.cart.clear();
-      $("discount").value = "";
-      renderCart();
-      toast(`Order ${order.id} placed. Pay for it under Your orders.`);
-      await loadOrders();
-    } catch (err) {
-      toast(err.status === 400 ? `Couldn't place the order: ${err.message}.` : `Couldn't place the order. ${describe(err)}`, "error");
-    } finally {
-      btn.disabled = false;
-    }
+  function viewCart() {
+    const v = show(`<h1>Your cart</h1><p class="lede">Check your sheets, then go to checkout.</p><div id="cart-body"></div>`, "Cart");
+    const body = v.querySelector("#cart-body");
+    const draw = () => {
+      if (!state.cart.size) {
+        body.innerHTML = `<div class="empty-state" data-testid="cart-empty"><p>Your cart is empty.</p><a class="btn" href="#/inventory">Browse patterns</a></div>`;
+        return;
+      }
+      body.innerHTML = `<div class="two"><ul class="lines">${cartLines(true)}</ul>
+        <div class="summary"><p class="sum"><span>${cartCount()} sheet(s)</span><b>${money(subtotal())}</b></p>
+          <div class="row" style="margin-top:16px"><a class="btn quiet" href="#/inventory" data-testid="continue-shopping">Continue shopping</a>
+          <a class="btn grow" href="#/checkout/info" data-testid="checkout">Checkout</a></div></div></div>`;
+    };
+    draw();
+    body.addEventListener("click", (e) => {
+      const inc = e.target.closest("[data-inc]"), dec = e.target.closest("[data-dec]");
+      if (inc) { setCart(+inc.dataset.inc, (state.cart.get(+inc.dataset.inc) || 0) + 1); draw(); }
+      if (dec) { setCart(+dec.dataset.dec, (state.cart.get(+dec.dataset.dec) || 0) - 1); draw(); }
+    });
+    bindCartButtons(body, draw);
   }
 
-  async function orderAction(id, action, button) {
-    button.disabled = true;
-    try {
-      const order = await api(`/api/orders/${id}/${action}`, { method: "POST" });
-      if (action === "pay") toast(`Order ${id} paid: ${money(order.total)}.`);
-      else toast(`Order ${id} cancelled.${order.refunded ? ` ${money(order.refunded)} refunded.` : ""}`);
-    } catch (err) {
-      const verb = action === "pay" ? "pay for" : "cancel";
-      toast(`Couldn't ${verb} order ${id}. ${describe(err)}`, "error");
-    }
-    await loadOrders();
+  const steps = (n) => `<ol class="steps" aria-label="Checkout steps">${["Your details", "Overview", "Done"].map((t, i) =>
+    `<li${i + 1 === n ? ' aria-current="step"' : ""}${i + 1 < n ? ' class="done"' : ""}>${i + 1}. ${t}</li>`).join("")}</ol>`;
+
+  function viewInfo() {
+    if (!state.cart.size) { location.hash = "#/cart"; return; }
+    const i = state.info || {};
+    const v = show(`${steps(1)}<h1>Your details</h1><p class="lede">Where should the sheets go?</p>
+      <form class="card" id="info" novalidate style="max-width:560px">
+        <label for="first-name">First name</label><input type="text" id="first-name" data-testid="first-name" value="${esc(i.first_name || "")}" autocomplete="given-name">
+        <label for="last-name">Last name</label><input type="text" id="last-name" data-testid="last-name" value="${esc(i.last_name || "")}" autocomplete="family-name">
+        <label for="postal-code">Postal code</label><input type="text" id="postal-code" data-testid="postal-code" value="${esc(i.postal_code || "")}" autocomplete="postal-code">
+        <div class="error-box" id="checkout-error" data-testid="checkout-error" role="alert" hidden><span></span><button type="button" aria-label="Dismiss">&times;</button></div>
+        <div class="row end" style="margin-top:18px"><a class="btn quiet" href="#/cart" data-testid="cancel-checkout">Back to cart</a><button class="btn" type="submit" data-testid="continue">Continue</button></div>
+      </form>`, "Your details");
+    const last = v.querySelector("#last-name");
+    if (quirk("problem")) last.addEventListener("input", () => { last.value = ""; });  // problem user: last name will not type
+    const err = v.querySelector("#checkout-error");
+    err.querySelector("button").addEventListener("click", () => { err.hidden = true; });
+    v.querySelector("#info").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const fields = [["first-name", "First name"], ["last-name", "Last name"], ["postal-code", "Postal code"]];
+      v.querySelectorAll("input").forEach((x) => x.removeAttribute("aria-invalid"));
+      const missing = fields.find(([fid]) => !v.querySelector("#" + fid).value.trim());
+      if (missing) {
+        v.querySelector("#" + missing[0]).setAttribute("aria-invalid", "true");
+        err.querySelector("span").textContent = `${missing[1]} is required`; err.hidden = false;
+        v.querySelector("#" + missing[0]).focus();
+        return;
+      }
+      state.info = { first_name: v.querySelector("#first-name").value.trim(), last_name: last.value.trim(),
+                     postal_code: v.querySelector("#postal-code").value.trim() };
+      location.hash = "#/checkout/overview";
+    });
   }
 
-  // ---- wiring ----
-  document.addEventListener("click", (event) => {
-    const t = event.target.closest("button");
-    if (!t) return;
-    if (t.dataset.add) {
-      const id = Number(t.dataset.add);
-      changeQty(id, 1);
-      toast(`${state.byId[id].name} added to cart`);
-    } else if (t.dataset.inc) changeQty(Number(t.dataset.inc), 1);
-    else if (t.dataset.dec) changeQty(Number(t.dataset.dec), -1);
-    else if (t.dataset.pay) orderAction(Number(t.dataset.pay), "pay", t);
-    else if (t.dataset.cancel) orderAction(Number(t.dataset.cancel), "cancel", t);
-  });
-  $("login-form").addEventListener("submit", signIn);
-  $("sign-out").addEventListener("click", signOut);
-  $("checkout").addEventListener("click", placeOrder);
-  $("discount").addEventListener("input", renderCart);
+  function viewOverview() {
+    if (!state.cart.size) { location.hash = "#/cart"; return; }
+    if (!state.info) { location.hash = "#/checkout/info"; return; }
+    const v = show(`${steps(2)}<h1>Overview</h1><p class="lede">Check everything, then place your order.</p>
+      <div class="two"><ul class="lines">${cartLines(false)}</ul>
+        <div class="summary">
+          <dl class="info"><dt>Payment</dt><dd>Mosaic test card ending 4242</dd>
+            <dt>Deliver to</dt><dd>${esc(state.info.first_name)} ${esc(state.info.last_name)}, ${esc(state.info.postal_code)}</dd></dl>
+          <div class="discount-row"><div><label for="discount">Discount code</label><input type="text" id="discount" data-testid="discount" placeholder="MOSAIC10" value="${esc(state.code)}"></div>
+            <button class="btn quiet" type="button" id="apply" data-testid="apply-discount">Apply</button></div>
+          <p class="field-error" id="code-error" hidden></p>
+          <div id="totals"></div>
+          <div class="row" style="margin-top:16px"><a class="btn quiet" href="#/cart" data-testid="cancel-overview">Cancel</a><button class="btn grow" type="button" id="finish" data-testid="finish">Place order</button></div>
+        </div></div>`, "Overview");
+    const totals = v.querySelector("#totals");
+    const draw = () => {
+      // The same rounding as the server (Python's round: halves go to the even cent), so the
+      // total shown is the total charged.
+      const sub = subtotal(), rate = DISCOUNTS[state.code] || 0, save = sub - roundEven(sub * (1 - rate));
+      totals.innerHTML = `<p class="sum"><span>Item total</span><span data-testid="item-total">${money(sub)}</span></p>
+        ${rate ? `<p class="sum"><span>Discount ${esc(state.code)}</span><span class="save">&minus;${money(save)}</span></p>` : ""}
+        <p class="sum total"><span>Total <span class="per">VAT included</span></span><span data-testid="total">${money(sub - save)}</span></p>`;
+    };
+    draw();
+    v.querySelector("#apply").addEventListener("click", () => {
+      const code = v.querySelector("#discount").value.trim().toUpperCase(), e = v.querySelector("#code-error");
+      if (code && !DISCOUNTS[code]) { e.textContent = `${code} is not a discount code we know`; e.hidden = false; return; }
+      e.hidden = true; state.code = code; draw();
+      if (code) toast(`${code} applied.`);
+    });
+    v.querySelector("#finish").addEventListener("click", async (ev) => {
+      const btn = ev.currentTarget;
+      if (quirk("error")) { console.error("Checkout failed: payment service unavailable."); toast("Something went wrong placing your order. Please try again.", "error"); return; }
+      const typed = v.querySelector("#discount").value.trim().toUpperCase();
+      if (typed && typed !== state.code) { v.querySelector("#apply").click(); if (!DISCOUNTS[typed]) return; }
+      btn.disabled = true; btn.textContent = "Placing order…";
+      try {
+        const items = [...state.cart].map(([product_id, qty]) => ({ product_id, qty }));
+        const order = await api("/api/orders", { method: "POST", body: { items, discount_code: state.code || null, ship_to: state.info } });
+        await api(`/api/orders/${order.id}/pay`, { method: "POST" });
+        state.cart.clear(); state.code = ""; saveCart();
+        location.hash = `#/checkout/complete/${order.id}`;
+      } catch (ex) {
+        toast(describe(ex), "error"); btn.disabled = false; btn.textContent = "Place order";
+      }
+    });
+  }
+
+  function viewComplete(id) {
+    show(`${steps(3)}<div class="done-card" data-testid="complete">
+        <div class="tick" aria-hidden="true">&#10003;</div>
+        <h1>Thank you for your order!</h1>
+        <p class="lede" style="margin:12px auto 24px">Order <b data-testid="order-number">${esc(id)}</b> is paid. Your sheets leave the warehouse within two working days.</p>
+        <div class="row" style="justify-content:center"><a class="btn" href="#/inventory" data-testid="back-home">Back to patterns</a><a class="btn quiet" href="#/orders">See my orders</a></div>
+      </div>`, "Thank you");
+  }
+
+  async function viewOrders() {
+    const v = show(`<h1>My orders</h1><p class="lede">Pay for an order, or cancel it before it ships.</p><div id="orders"><p class="per">Loading…</p></div>`, "My orders");
+    const box = v.querySelector("#orders");
+    const draw = () => {
+      if (!state.orders.length) { box.innerHTML = `<div class="empty-state" data-testid="orders-empty"><p>No orders yet.</p><a class="btn" href="#/inventory">Browse patterns</a></div>`; return; }
+      box.innerHTML = [...state.orders].reverse().map((o) => {
+        const canPay = o.status === "created", canCancel = o.status === "created" || o.status === "paid";
+        return `<div class="order" data-testid="order-${o.id}">
+          <div class="order-head"><b>Order ${o.id}</b><span class="status" data-s="${o.status}" data-testid="status-${o.id}">${o.status}</span></div>
+          <div class="order-items">${o.items.map((i) => `${i.qty} &times; ${esc(i.name)}`).join(", ")} &middot; ${money(o.total)}${o.discount_code ? ` with ${esc(o.discount_code)}` : ""}</div>
+          <div class="order-actions">
+            ${canPay ? `<button class="btn small" type="button" data-pay="${o.id}" data-testid="pay-${o.id}">Pay ${money(o.total)}</button>` : ""}
+            ${canCancel ? `<button class="btn remove small" type="button" data-cancel="${o.id}" data-testid="cancel-${o.id}">Cancel order</button>` : ""}
+            ${o.refunded ? `<span class="refund">Refunded ${money(o.refunded)}</span>` : ""}
+          </div></div>`;
+      }).join("");
+    };
+    const reload = async () => { state.orders = await api("/api/orders"); draw(); };
+    try { await reload(); } catch (ex) { box.innerHTML = `<p class="per">${esc(describe(ex))}</p>`; }
+    box.addEventListener("click", async (e) => {
+      const pay = e.target.closest("[data-pay]"), cancel = e.target.closest("[data-cancel]");
+      const btn = pay || cancel; if (!btn) return;
+      btn.disabled = true;
+      try {
+        if (pay) { await api(`/api/orders/${pay.dataset.pay}/pay`, { method: "POST" }); toast(`Order ${pay.dataset.pay} paid.`); }
+        else {
+          const o = await api(`/api/orders/${cancel.dataset.cancel}/cancel`, { method: "POST" });
+          toast(`Order ${o.id} cancelled${o.refunded ? `, ${money(o.refunded)} refunded` : ""}.`);
+        }
+        await reload();
+      } catch (ex) { toast(describe(ex), "error"); btn.disabled = false; }
+    });
+  }
+
+  function viewAbout() {
+    show(`<h1>About Mosaic Market</h1>
+      <p class="lede">A practice shop for testing. It has the features of a classic demo store (personas, sorting, a cart, a three-step checkout) and five planted bugs for Tessella to find.</p>
+      <div class="card" style="max-width:720px"><h2>The personas</h2><dl class="info">
+        ${ACCOUNTS.slice(2).map(([u, , what]) => `<dt>${u}</dt><dd>${what}</dd>`).join("")}</dl>
+        <p class="per">anna and bob are the test suite's customers; their shop behaves normally.</p></div>`, "About");
+  }
+
+  // ---- router ----
+  function route() {
+    const parts = (location.hash.replace(/^#\/?/, "") || "inventory").split("/");
+    const signed = !!state.token;
+    menu(false);
+    if (!signed && parts[0] !== "login") { location.hash = "#/login"; return; }
+    if (signed && parts[0] === "login") { location.hash = "#/inventory"; return; }
+    const views = {
+      login: viewLogin, inventory: viewInventory, product: () => viewProduct(+parts[1]), cart: viewCart,
+      orders: viewOrders, about: viewAbout,
+      checkout: () => ({ info: viewInfo, overview: viewOverview, complete: () => viewComplete(parts[2]) }[parts[1]] || viewInfo)(),
+    };
+    (views[parts[0]] || viewInventory)();
+  }
+  window.addEventListener("hashchange", route);
 
   async function start() {
+    state.sort = store.get("mm-sort") || "az";
+    const s = store.get("mm-session");
+    if (s && s.token) { state.token = s.token; state.user = s.user; state.persona = s.persona; }
     try {
       state.products = await api("/api/products");
-    } catch (err) {
-      $("catalogue").innerHTML = `<p class="empty" style="background:var(--plate);padding:16px;margin:0">The catalogue didn't load. ${describe(err)}</p>`;
-      return;
+      state.byId = Object.fromEntries(state.products.map((p) => [p.id, p]));
+    } catch (ex) { toast(describe(ex), "error"); }
+    if (state.token) {
+      try { await api("/api/orders"); }  // a session from before a shop restart is gone
+      catch { state.token = state.user = state.persona = null; saveSession(); }
     }
-    state.products.forEach((p) => { state.byId[p.id] = p; });
-    buildWall();
-    renderCatalogue();
-    renderCart();
-    renderAccount();
-    renderOrders();
+    if (state.user) loadCart();
+    chrome();
+    route();
     document.body.dataset.ready = "true";
-    loadPicks();
   }
   start();
 })();

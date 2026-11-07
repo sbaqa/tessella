@@ -1,13 +1,19 @@
 # Mosaic Market: the demo shop
 
-A small tile shop with **five planted bugs** and a pytest + Playwright suite. It is
+A small tile shop with the features of a classic practice store (test personas, sorting,
+a cart, a three-step checkout), a smoother interface, **five planted bugs** and a full
+Playwright suite (API and UI) built on page objects. It is
 Tessella's test target, demo and benchmark: run the suite, point Tessella at the reports,
 and check that it sorts every failure correctly and finds the bugs the suite misses.
 
 - **Backend:** Starlette (the toolkit FastAPI is built on) on uvicorn, with in-memory data.
-- **Frontend:** one HTML page, no build step. The catalogue is laid out like tiles on a wall.
-- **Tests:** API tests with httpx, browser tests with pytest-playwright, an Allure report
-  with a screenshot for every UI test, a Playwright trace for every UI test.
+- **Frontend:** one HTML page, no build step: sign-in, patterns (sort, search), product page,
+  cart (quantities, undo), checkout (details, overview with discount, thank-you), my orders,
+  a side menu (all patterns, my orders, about, reset app state, log out). Cart, sign-in and
+  sort order survive a reload; dark mode, phone layout and keyboard navigation work.
+- **Tests:** everything on Playwright: API tests on its request context, UI tests with
+  pytest-playwright, an Allure report with a screenshot per UI test, a Playwright trace per
+  UI test. See [The test suite](#the-test-suite).
 - **Logs:** every API request goes to `logs/app.log`, with the full traceback when a request
   crashes. Tessella reads this file as backend evidence.
 
@@ -15,8 +21,8 @@ and check that it sorts every failure correctly and finds the bugs the suite mis
 
 | # | Bug | Kind | Does the suite catch it? | How Tessella should find it |
 |---|-----|------|--------------------------|-----------------------------|
-| 1 | Cancelling a paid, discounted order crashes with a 500 | Product bug | Yes: 1 API test and 1 UI test fail | Triage: groups both failures into one Case, cites the `KeyError` in `logs/app.log` and the red error toast in the screenshot |
-| 2 | `test_login` clicks `#login`, but the button is now `#sign-in` | **Test bug** | Yes: the test fails | Triage: calls it a test bug (selector not found, the app works), drafts a patch for the test, no product ticket |
+| 1 | Cancelling a paid, discounted order crashes with a 500 | Product bug | Yes: `test_cancel_paid_discounted_order_refunds_in_full` (API) and `test_cancel_discounted_order` (UI) fail | Triage: groups both failures into one Case, cites the `KeyError` in `logs/app.log` and the red error toast in the screenshot |
+| 2 | `test_login` clicks `#login`, but the button is now `#sign-in` | **Test bug** | Yes: the test fails (it predates the page objects and uses raw selectors) | Triage: calls it a test bug (selector not found, the app works), drafts a patch for the test, no product ticket |
 | 3 | Any signed-in user can read any order by ID | Product bug (security) | No | Probe: identity mutation, replays anna's `GET /api/orders/{id}` as bob |
 | 4 | Paying the same order twice in parallel charges twice | Product bug (race) | No | Probe: concurrency mutation, fires the pay request in parallel and checks the charges |
 | 5 | Cancelling a shipped order returns 409, but the order is cancelled anyway | Product bug (state) | No: the test checks the 409, not the order afterwards | Probe: state oracle, reads the order back after a rejected request |
@@ -35,8 +41,49 @@ DEMO_SHOP_FIXED=all  uvicorn shop.app:app --port 8765   # every product bug fixe
 DEMO_SHOP_FIXED=1,4  uvicorn shop.app:app --port 8765   # only bugs 1 and 4 fixed
 ```
 
-Bug 2 is in the test itself (`tests/ui/test_shop_ui.py`), so fixing it means editing the
+Bug 2 is in the test itself (`tests/ui/test_sign_in.py`), so fixing it means editing the
 selector, which is exactly the patch Tessella should draft.
+
+## Test accounts and personas
+
+`anna` / `anna-pass` and `bob` / `bob-pass` are the suite's customers; their shop behaves
+normally. Six personas share the password `mosaic-pass`, each with a quirk that appears only
+when you sign in as it, so the planted bugs above stay exactly as they are:
+
+| Persona | What it does |
+|---|---|
+| `standard` | Everything works |
+| `locked` | Cannot sign in: "Sorry, this user has been locked out" |
+| `problem` | One image on every pattern, sorting does nothing, some Add buttons do nothing, the last name will not type |
+| `slow` | Signing in takes 2.5 s |
+| `error` | Removing from the cart and placing an order fail with an error |
+| `visual` | A tile is rotated, a button and the cart badge are out of place, one price is wrong |
+
+## The test suite
+
+Everything runs on Playwright: API tests use its request context, UI tests use
+pytest-playwright. Tests never touch URLs or selectors directly; they go through a small
+framework in `tests/framework/`, each part with one job:
+
+| Part | Job |
+|---|---|
+| `data.py` | Accounts, products, delivery details, prices: test data by meaning |
+| `api/session.py` | `ApiSession`: the transport (base URL, token), nothing else |
+| `api/clients.py` | `AuthApi`, `CatalogueApi`, `OrdersApi`: one client per API area, returning responses, never asserting; `OrderSteps` builds orders in a given state |
+| `pages/components.py` | `Header`, `SideMenu`, `Toast`: parts every screen shares |
+| `pages/screens.py` | One page object per screen (`LoginPage`, `InventoryPage`, `CartPage`, `CheckoutInfoPage`, …); actions that change screen return the next page object |
+| `flows.py` | `Shopper`: journeys across screens (sign in, fill the cart, buy) |
+| `conftest.py` | Fixtures that hand these to tests (dependency injection) |
+
+Adding a screen means a new page object and fixture, not edits to existing tests. The
+default run (`pytest`) covers auth, catalogue and orders over the API and every screen in
+the browser. Two markers keep extra tests out of it, so the default run's failures are
+exactly the planted ones:
+
+```bash
+pytest -m planted     # 4 tests that expose bugs 1, 3, 4, 5 (fail while the bugs are on)
+pytest -m persona     # 7 tests that expose the persona quirks (fail on purpose)
+```
 
 ## Run it yourself, step by step
 
@@ -53,14 +100,14 @@ source venv/bin/activate
 pip install -e ".[all,dev]"            # Tessella itself, if you have not done it yet
 
 cd examples/demo_shop
-pip install -r requirements.txt        # starlette, uvicorn, httpx, pytest, allure-pytest, pytest-playwright
+pip install -r requirements.txt        # starlette, uvicorn, pytest, allure-pytest, pytest-playwright
 playwright install chromium            # the browser the UI tests drive (about 150 MB)
 ```
 
 Check it worked:
 
 ```bash
-python -c "import starlette, uvicorn, httpx, allure, pytest_playwright; print('ok')"
+python -c "import starlette, uvicorn, allure, pytest_playwright; print('ok')"
 ```
 
 You'll also need the [Allure commandline](https://allurereport.org/docs/install/) (`allure
@@ -84,13 +131,14 @@ API request is logged to `logs/app.log`.
 
 Open <http://127.0.0.1:8765> and:
 
-1. Sign in as `anna` / `anna-pass`.
-2. Click **Add to cart** on Marble Arabesque twice.
-3. Type `TILE25` into **Discount code**. The total drops to $37.35.
-4. Click **Place order**. Order 1001 appears under **Your orders** with status *created*.
-5. Click **Pay $37.35**. The status changes to *paid*.
-6. Click **Cancel order**. A red message says the server answered 500, and the order shows
-   *cancelled* with no refund: the crash happened halfway through the cancel.
+1. Sign in as `anna` / `anna-pass` (or select `anna` under **Test accounts**).
+2. Click **Add to cart** on Marble Arabesque, open **Cart** and press **+** once (2 sheets).
+3. **Checkout**, fill in your details, **Continue**.
+4. Type `TILE25` into **Discount code** and **Apply**. The total drops to $37.35.
+5. **Place order**. The thank-you page shows order 1001, already paid.
+6. Open the menu, **My orders**, and click **Cancel order**. A red message says the server
+   answered 500, and the order shows *cancelled* with no refund: the crash happened halfway
+   through the cancel.
 
 Then look at what the backend saw (terminal 2):
 
@@ -138,9 +186,9 @@ The tests use the shop from step 2 if it is running, and start their own on port
 it is not. They empty the shop before each test, so the orders you made in the browser
 disappear. A run takes under a minute.
 
-Expected: **18 tests, 3 failed** (bug 1 in the API test and the UI test, bug 2 in
+Expected: **95 tests, 3 failed** (bug 1 in the API test and the UI test, bug 2 in
 `test_login`). About one run in three, `test_recommendations_respond_quickly` fails too;
-that is the flaky test doing its job.
+that is the flaky test doing its job. A run takes about three minutes.
 
 `run_suite.sh` writes:
 
@@ -173,7 +221,7 @@ In the Allure report, open `test_cancel_discounted_order`: its screenshot shows 
 error message. Some useful variations:
 
 ```bash
-pytest tests/ui/test_shop_ui.py::test_login -q             # one test
+pytest tests/ui/test_sign_in.py::test_login -q             # one test
 pytest tests/ui -k cancel --headed --slowmo 500             # watch the browser
 pytest tests/api -q                                         # API tests only
 ```
@@ -191,7 +239,7 @@ Then, in terminal 2:
 ```bash
 bash run_suite.sh          # now only test_login fails (bug 2 lives in the test)
 bash show_bugs.sh          # every "actual" matches "expected"
-pytest -m planted          # 5 passed: the proof tests for bugs 1, 3, 4, 5
+pytest -m planted          # 4 passed: the proof tests for bugs 1, 3, 4, 5
 ```
 
 If no shop is running, put the variable on the test run instead, since the tests start
@@ -316,10 +364,10 @@ demo_shop/
 │   ├── bugs.py         DEMO_SHOP_FIXED switch
 │   └── static/index.html
 ├── tests/
-│   ├── conftest.py     starts the shop if needed, resets it per test, screenshots
-│   ├── helpers.py      demo accounts and login
-│   ├── api/            httpx tests (bug 1, the flaky test)
-│   ├── ui/             Playwright tests (bugs 1 and 2)
+│   ├── conftest.py     starts the shop if needed, resets it per test, fixtures, screenshots
+│   ├── framework/      data, API clients, page objects, the Shopper flow
+│   ├── api/            auth, catalogue (the flaky test), orders (bug 1)
+│   ├── ui/             sign-in (bug 2), patterns, cart, checkout, orders (bug 1), menu, personas
 │   └── planted/        proof tests, run with -m planted
 ├── pytest.ini
 ├── requirements.txt
@@ -328,5 +376,5 @@ demo_shop/
 └── tessella.yaml
 ```
 
-The accounts (`anna` / `anna-pass`, `bob` / `bob-pass`) and the `/api/test/reset` endpoint
-exist only for this demo.
+The accounts (`anna` / `anna-pass`, `bob` / `bob-pass`, the personas with `mosaic-pass`)
+and the `/api/test/reset` endpoint exist only for this demo.
