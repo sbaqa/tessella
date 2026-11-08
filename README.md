@@ -102,7 +102,8 @@ You need Python 3.12 and the [Allure command line](https://allurereport.org/docs
 ```bash
 git clone https://github.com/sbaqa/tessella && cd tessella
 python3 -m venv venv && source venv/bin/activate && pip install -e ".[all,dev]"
-cd examples/demo_shop && pip install -r requirements.txt && playwright install chromium && cp tessella.example.yaml tessella.yaml
+cd examples/demo_shop && pip install -r requirements.txt
+playwright install chromium && cp tessella.example.yaml tessella.yaml
 bash run_suite.sh && tessella triage --no-model --no-rerun && tessella queue
 ```
 
@@ -112,12 +113,51 @@ Then open <http://127.0.0.1:8484>. For real verdicts, download the model once (3
 tessella models pull qwen3.5:4b && tessella triage
 ```
 
+## Use it on your own project
+
+From a clone, `tessella init` asks a few questions and writes your settings. Or write the few lines yourself:
+
+```yaml
+# tessella.yaml
+inputs:
+  reports: ["allure-report/"]        # or playwright-report/, junit.xml, a pytest-html file
+rerun:
+  command: "pytest {test_id} -q"     # how to run one failing test again
+```
+
+```bash
+tessella models pull qwen3.5:4b      # once
+tessella triage && tessella queue    # after any test run
+```
+
+| Works with | |
+| --- | --- |
+| **Test reports** | Playwright HTML, Allure, pytest-html, any framework that writes JUnit XML |
+| **Flows** | Playwright traces, HAR files |
+| **Findings** | Schemathesis, OWASP ZAP |
+| **Backend logs** | Log files, Loki, Elasticsearch |
+| **Ticket boards** | Jira (Cloud or self-hosted), GitHub Issues |
+| **CI comments** | GitHub Actions, GitLab CI |
+| **Local models** | Ollama (built in), llama.cpp server, vLLM, LM Studio |
+| **Cloud models** | Optional, through LiteLLM and your data policy |
+
+## Why not just paste the log into ChatGPT?
+
+| Pasting into a chatbot | Tessella |
+| --- | --- |
+| Sees the one log you pasted | Re-runs the test, reads backend logs, code changes and screenshots |
+| Answers confidently either way | Must cite evidence, or says "unknown" and drafts nothing |
+| One failure at a time | Groups 40 red tests into the few real problems |
+| Forgets everything | Remembers your decisions and never asks twice |
+| Suggests a fix you have to try | Tests the fix first, and only shows one that passed |
+| Your logs and code leave the building | Runs on your machine, and can prove it |
+
 ## The big picture
 
 Plain code gathers the evidence first. The model only reasons over that evidence and must cite it, which keeps small local models useful and makes every verdict checkable.
 
 ```mermaid
-flowchart LR
+flowchart TD
   R["Test reports<br/>Playwright · Allure · pytest-html · JUnit"] --> C["1 Collect"]
   T["Traces and HAR<br/>from the same suite"] --> C
   C --> K["2 Cluster and recall"]
@@ -158,7 +198,7 @@ flowchart TD
 <summary><b>🛠 How the fixer agent checks a fix</b></summary>
 
 ```mermaid
-flowchart LR
+flowchart TD
   A["Product bug"] --> R["Read and search<br/>the code"]
   R --> E["Propose an edit"]
   E --> S["Temporary copy<br/>app started from it"]
@@ -233,7 +273,7 @@ Public list prices checked on 8 November 2026. They change often, and these tool
 
 ## Status at a glance
 
-| | |
+| Level | What |
 | --- | --- |
 | ✅ **Proven on real runs** | Triage on a local model · Jira filing and duplicate checks · review queue, report and Board · fixer agent on a planted bug · Schemathesis imports · offline bundle install |
 | 🧪 **Tested with simulated services** | PR comments on GitHub and GitLab · GitHub Issues filing · Loki and Elasticsearch logs · ZAP imports · team server on a GPU |
@@ -247,12 +287,13 @@ Early development: expect rough edges. The [full status table](#what-works-today
 
 # Full documentation
 
-Everything else, folded away. Select a section to open it.
+Everything else, folded away. Select a topic to open it.
 
-## Why Tessella exists
+## 📖 Understand
 
+<a id="why-tessella-exists"></a>
 <details>
-<summary><b>🤔 The two problems it solves</b></summary>
+<summary>🤔 <b>Why Tessella exists</b></summary>
 
 Two problems meet in every QA team that runs automated tests at scale.
 
@@ -275,10 +316,9 @@ approved by a person before it is filed.
 
 </details>
 
-## What it does
-
+<a id="what-it-does"></a>
 <details>
-<summary><b>🔍 Triage, probe and fix, and what it deliberately is not</b></summary>
+<summary>🔍 <b>What it does</b></summary>
 
 Tessella answers one question for every build: **is it safe to ship, and if not, why?**
 It has two ways of finding the answer, working on the same data:
@@ -301,10 +341,9 @@ queue, and teach one memory. Nothing reaches Jira or your repository without an 
 
 </details>
 
-## The value for quality teams
-
+<a id="the-value-for-quality-teams"></a>
 <details>
-<summary><b>👥 What changes for each role</b></summary>
+<summary>👥 <b>The value for quality teams</b></summary>
 
 | Who | What changes for them |
 | --- | --- |
@@ -321,10 +360,9 @@ fixes; a person applies them.
 
 </details>
 
-## How it compares
-
+<a id="how-it-compares"></a>
 <details>
-<summary><b>⚖️ Tessella next to other tools</b></summary>
+<summary>⚖️ <b>How it compares</b></summary>
 
 | Capability | Tessella | Cloud test platforms (e.g. BrowserStack) | ReportPortal | Playwright-first SaaS (e.g. TestDino) | Playwright Healer | Small open-source analyzers |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -341,11 +379,21 @@ recently. See each vendor's current documentation.
 
 </details>
 
-## How it works
-
+<a id="how-it-works"></a>
 <a id="the-loop"></a>
+<a id="everything-is-a-case"></a>
+<a id="stage-by-stage"></a>
+<a id="screenshots-as-evidence"></a>
+<a id="models-and-data-policy-local-reads-cloud-writes"></a>
+<a id="the-review-queue-and-how-it-learns"></a>
+<a id="the-report"></a>
+<a id="time-saved"></a>
+<a id="tickets-runs-and-the-short-page"></a>
 <details>
-<summary><b>🧠 The loop</b></summary>
+<summary>🧠 <b>How it works</b></summary>
+
+<details>
+<summary><b>The loop</b></summary>
 
 See [The big picture](#the-big-picture) for the diagram.
 
@@ -354,9 +402,8 @@ it. This keeps small local models useful and makes every verdict checkable.
 
 </details>
 
-<a id="everything-is-a-case"></a>
 <details>
-<summary><b>🧠 Everything is a Case</b></summary>
+<summary><b>Everything is a Case</b></summary>
 
 One data model carries everything (`src/tessella/models.py`):
 
@@ -373,9 +420,8 @@ Readers turn every input into Cases and Flows; no later stage touches raw files.
 
 </details>
 
-<a id="stage-by-stage"></a>
 <details>
-<summary><b>🧠 Stage by stage</b></summary>
+<summary><b>Stage by stage</b></summary>
 
 1. **Collect.** Readers parse reports from the data they embed, not the page layout: Playwright
    HTML reports carry their results inside the page, Allure writes JSON next to its HTML,
@@ -425,9 +471,8 @@ Readers turn every input into Cases and Flows; no later stage touches raw files.
 
 </details>
 
-<a id="screenshots-as-evidence"></a>
 <details>
-<summary><b>🧠 Screenshots as evidence</b></summary>
+<summary><b>Screenshots as evidence</b></summary>
 
 For UI failures, logs often miss the real cause: a dialog covering a button, an error banner,
 an empty list, a broken layout. Tessella uses screenshots in two layers:
@@ -444,9 +489,8 @@ lets screenshots leave the network, so the vision role normally runs on a local 
 
 </details>
 
-<a id="models-and-data-policy-local-reads-cloud-writes"></a>
 <details>
-<summary><b>🧠 Models and data policy: local reads, cloud writes</b></summary>
+<summary><b>Models and data policy: local reads, cloud writes</b></summary>
 
 Tessella has four model roles, each of which can be local or cloud:
 
@@ -553,9 +597,8 @@ calls file. Eval only measures: to review each failure and approve or reject its
 
 </details>
 
-<a id="the-review-queue-and-how-it-learns"></a>
 <details>
-<summary><b>🧠 The review queue and how it learns</b></summary>
+<summary><b>The review queue and how it learns</b></summary>
 
 The review queue (`tessella queue`, at `http://localhost:8484`) lists open Cases with their
 verdict, cited evidence, screenshots and the drafted ticket (description, steps to
@@ -607,9 +650,8 @@ triage and approval behave exactly as the local-only flow.
 
 </details>
 
-<a id="the-report"></a>
 <details>
-<summary><b>🧠 The report</b></summary>
+<summary><b>The report</b></summary>
 
 `tessella report` writes one HTML file, `.tessella/report.html`, from what Tessella has
 already stored. Open it from disk, attach it to a CI run, or send it to someone who has not
@@ -662,9 +704,8 @@ can also be hidden and moved in Customize, and "Summary only" hides the detail p
 
 </details>
 
-<a id="time-saved"></a>
 <details>
-<summary><b>🧠 Time saved</b></summary>
+<summary><b>Time saved</b></summary>
 
 The figure is a net: **manual work avoided, minus the time people spent reviewing**. Each
 input carries a label on the page, so a manager can see how much of the number is evidence.
@@ -691,9 +732,8 @@ the way you would without Tessella. Five or more samples of each kind give a sta
 
 </details>
 
-<a id="tickets-runs-and-the-short-page"></a>
 <details>
-<summary><b>🧠 Tickets, runs and the short page</b></summary>
+<summary><b>Tickets, runs and the short page</b></summary>
 
 **Ticket outcomes.** An approval says a person believed the draft; whether the ticket was
 worth filing is what developers did with it. `tessella sync` reads the status and resolution of
@@ -723,11 +763,17 @@ starts Ollama.
 
 </details>
 
-## How it is built
+</details>
 
+<a id="how-it-is-built"></a>
 <a id="design-principles"></a>
+<a id="project-structure"></a>
+<a id="technology"></a>
 <details>
-<summary><b>🏗 Design principles</b></summary>
+<summary>🏗 <b>How it is built</b></summary>
+
+<details>
+<summary><b>Design principles</b></summary>
 
 1. **Evidence first, model last.** Deterministic code gathers facts; the model must cite them.
 2. **Nothing leaves the network unless you allow it.** All HTTP goes through `net.py` and its
@@ -739,9 +785,8 @@ starts Ollama.
 
 </details>
 
-<a id="project-structure"></a>
 <details>
-<summary><b>🏗 Project structure</b></summary>
+<summary><b>Project structure</b></summary>
 
 ```
 tessella/
@@ -781,9 +826,8 @@ tessella/
 
 </details>
 
-<a id="technology"></a>
 <details>
-<summary><b>🏗 Technology</b></summary>
+<summary><b>Technology</b></summary>
 
 | Layer | Choice |
 | --- | --- |
@@ -803,11 +847,21 @@ Optional extras keep the core small: `llm` (LiteLLM), `queue` (FastAPI, Uvicorn,
 
 </details>
 
-## Getting started
+</details>
 
+## 🚀 Use
+
+<a id="getting-started"></a>
 <a id="requirements"></a>
+<a id="install"></a>
+<a id="first-run-with-no-model-and-no-setup"></a>
+<a id="try-it-on-the-demo-shop"></a>
+<a id="first-real-run"></a>
 <details>
-<summary><b>🚀 Requirements</b></summary>
+<summary>🚦 <b>Getting started</b></summary>
+
+<details>
+<summary><b>Requirements</b></summary>
 
 - Python 3.12 or newer
 - About 16 GB of RAM for the default local model (3.4 GB on disk). No GPU needed
@@ -817,9 +871,8 @@ Optional extras keep the core small: `llm` (LiteLLM), `queue` (FastAPI, Uvicorn,
 
 </details>
 
-<a id="install"></a>
 <details>
-<summary><b>🚀 Install</b></summary>
+<summary><b>Install</b></summary>
 
 From a clone of this repository:
 
@@ -853,9 +906,8 @@ installs the pip extras and pulls the Ollama models it decided it needs, the sam
 
 </details>
 
-<a id="first-run-with-no-model-and-no-setup"></a>
 <details>
-<summary><b>🚀 First run, with no model and no setup</b></summary>
+<summary><b>First run, with no model and no setup</b></summary>
 
 The repository includes a sample JUnit report. This checks that collecting and clustering work:
 
@@ -875,9 +927,8 @@ blocked.
 
 </details>
 
-<a id="try-it-on-the-demo-shop"></a>
 <details>
-<summary><b>🚀 Try it on the demo shop</b></summary>
+<summary><b>Try it on the demo shop</b></summary>
 
 `examples/demo_shop` is Mosaic Market, a small tile shop with test personas, a three-step checkout, a 95-test Playwright suite and five planted bugs, built to
 show Tessella end to end and to score it:
@@ -919,9 +970,8 @@ trace viewer, switching bugs, probing, starting over, troubleshooting) is in
 
 </details>
 
-<a id="first-real-run"></a>
 <details>
-<summary><b>🚀 First real run</b></summary>
+<summary><b>First real run</b></summary>
 
 Run `tessella init` in your project and answer its questions — it covers report paths,
 the rerun command, model setup (including starting the project-scoped Ollama server and
@@ -942,166 +992,11 @@ and `models.vision` yourself.
 
 </details>
 
-## Findings from Schemathesis and ZAP
-
-<details>
-<summary><b>🧪 Importing API and security findings</b></summary>
-
-Tessella does not send exploratory traffic to your system. Two established tools do that well,
-and their reports go into `tessella triage` next to your test reports:
-
-```bash
-# API: property-based tests from your OpenAPI schema
-schemathesis run https://staging.shop.local/openapi.json --report junit --report-dir st-report
-# Web security: ZAP baseline scan (Docker), traditional JSON report
-docker run -v "$PWD:/zap/wrk" -t ghcr.io/zaproxy/zaproxy:stable \
-  zap-baseline.py -t https://staging.shop.local -J zap.json
-
-tessella triage st-report/*.xml zap.json
-```
-
-- Each failing Schemathesis example and each ZAP alert becomes a probe finding with a severity
-  (`info` to `critical`), the request that shows it (the curl line Schemathesis prints, or
-  the ZAP URL and parameter) and the report text as cited evidence.
-- Findings are clustered, recalled and reviewed like failed tests, and the ticket's steps to
-  reproduce are the request itself.
-- No model is needed when the check leaves no doubt: a 5xx (ST101/ST102), a resource that
-  did not appear or disappear as promised (ST301/ST302), auth ignored or another user's data
-  (ST401/ST402), or a ZAP alert you marked Confirmed. These are product bugs. Schema
-  conformance problems and unconfirmed alerts go to the reader model.
-- `probe.min_severity` (default `low`) leaves out findings below it; ZAP informational
-  alerts and alerts marked false positive in ZAP never reach the queue.
-- Secrets are masked on the way in: header values for `Authorization`, `Cookie`,
-  `X-Api-Key` and every name in `redact`, plus the usual token patterns.
-
 </details>
 
-## Offline, in containers, and for a team
-
-<a id="offline-mode-proof-that-nothing-leaves"></a>
+<a id="usage"></a>
 <details>
-<summary><b>📦 Offline mode: proof that nothing leaves</b></summary>
-
-`tessella --offline <command>` (or `TESSELLA_OFFLINE=1`) refuses every network connection
-that is not loopback, from any code in the process: Tessella, a library, a raw socket, a DNS
-lookup. It works below `net.py`, through a Python audit hook, so it also catches what the
-allowlist cannot see. Each refused attempt is printed at the end of the run, and `triage`
-exits 3 if there was one, so a CI job fails on the first leak instead of passing quietly.
-Hosts inside your network that offline mode may still reach, such as a team model server, go
-in `network.offline_allow`.
-
-The other global option, `tessella --show-thinking <command>` (or `TESSELLA_SHOW_THINKING=1`),
-turns thinking on for that run (every Ollama call is sent with `think: true`, overriding the
-role's `think` in `tessella.yaml`, which is left as it is; slower on CPU), prints what the local
-model thinks while it answers, dimmed on stderr under a header per call, and appends each
-call's thinking and answer to `.tessella/thinking.jsonl`. It says once which config it loaded
-and what `think` that config has; a model that still returns no thinking is named with its role.
-
-`scripts/zero-egress.sh` adds the kernel as a second guard, for child processes too (a test
-re-run, git): it runs Tessella in a new network namespace whose only interface is loopback,
-starts the model server inside it, and turns offline mode on.
-
-```bash
-bash scripts/zero-egress.sh triage --no-rerun     # Linux; exit 3 means something tried to leave
-# it starts the project's Ollama inside the namespace, with the models from .tessella/models
-```
-
-</details>
-
-<a id="offline-bundle-install-on-a-machine-with-no-internet"></a>
-<details>
-<summary><b>📦 Offline bundle: install on a machine with no internet</b></summary>
-
-On a connected machine, from the Tessella source folder:
-
-```bash
-tessella bundle -o tessella-bundle.tar                  # wheels + your local Ollama models
-tessella bundle --python-version 3.12 --platform manylinux2014_x86_64 \
-  --ollama ollama-linux-amd64.tgz                       # for another machine, with Ollama itself
-```
-
-The archive holds every dependency as a wheel pinned by SHA-256 (`requirements.lock`), the
-Ollama model files your local roles use (manifests and blobs, from the project's
-`.tessella/models`), optionally the Ollama program, a `MANIFEST.json` with the SHA-256 of every
-file, and `install.py`, which needs only the Python standard library. On the offline machine:
-
-```bash
-tar -xf tessella-bundle.tar
-python3 tessella-bundle/install.py --venv .venv --models-dir .tessella/models
-```
-
-Every file is checked against the manifest first; if one does not match, nothing is installed.
-Wheels are installed with `pip --no-index --require-hashes`, models are copied where Ollama
-finds them. Upgrading later: `tessella install --from tessella-bundle.tar`.
-
-</details>
-
-<a id="containers"></a>
-<details>
-<summary><b>📦 Containers</b></summary>
-
-`Dockerfile` builds one image for laptops, CI and servers: base image pinned by digest, every
-dependency pinned by hash (`requirements.lock`), a non-root user, and a CycloneDX SBOM of the
-installed packages at `/opt/sbom.cdx.json`. `compose.yaml` runs it next to an Ollama server:
-
-```bash
-export TESSELLA_UID=$(id -u) TESSELLA_GID=$(id -g)  # files it writes in your project are yours
-docker compose up -d ollama queue                  # queue on http://127.0.0.1:8484
-docker compose run --rm triage                     # triage with no route to the internet
-```
-
-The model server sits on a Docker network with no way out, and triage shares its network
-namespace: it reaches the model on loopback (your `tessella.yaml` works unchanged) and nothing
-else, with offline mode on as well. Models come from `./.tessella/models` (override with
-`TESSELLA_MODELS`); the server cannot download any, so bring them with a bundle. The queue is
-published on this machine's loopback only, and has its own network to file approved tickets.
-
-</details>
-
-<a id="a-team-server"></a>
-<details>
-<summary><b>📦 A team server</b></summary>
-
-`deploy/team/compose.yaml` runs one GPU machine for everyone: vLLM behind an API key, and the
-review queue several reviewers sign in to over HTTPS.
-
-- **Shared model.** Laptops and CI point a role at it with the key in an environment variable:
-  `{provider: hosted_vllm, name: ..., base_url: "https://gpu-box.lan:8000/v1", api_key_env:
-  TESSELLA_MODEL_KEY}`. The key is sent as a Bearer token; it is never in the config.
-- **Shared queue.** `tessella queue --host 0.0.0.0 --tls-cert cert.pem --tls-key key.pem`
-  with `team.reviewers` in the config (`{anna: TESSELLA_PW_ANNA, ...}`: each reviewer's
-  password lives in an environment variable on the server). Every page asks for a reviewer's
-  name and password, and each decision records who made it, whatever the form says. The queue
-  refuses to listen beyond loopback without reviewers.
-- **Getting runs in.** Run triage on the server against its store, or have CI upload its
-  `.tessella/tessella.sqlite` and `tessella merge` it into the server's. The store uses SQLite
-  in WAL mode, so the queue keeps reading while a triage writes. One queue process owns the
-  file; that covers a team on one server without a database server to run.
-
-</details>
-
-<a id="mcp-server-for-coding-assistants"></a>
-<details>
-<summary><b>📦 MCP server for coding assistants</b></summary>
-
-`tessella mcp` (`pip install 'tessella[mcp]'`) serves cases, evidence and verdicts over the
-Model Context Protocol (stdio), so a developer's own coding assistant can answer "why does
-this test fail?" from Tessella's cited evidence. Tools: `list_cases`, `get_case`,
-`find_cases`, `cases_for_file` (cases whose stack or test id mentions the file you are
-editing) and `recent_runs`. It is read-only: nothing can be approved or filed through it. If
-the assistant uses a cloud model, set `mcp.excerpts: false` to serve summaries, verdicts and
-tickets without log lines, stacks or the reproduce request. Example client entry:
-
-```json
-{"mcpServers": {"tessella": {"command": "tessella", "args": ["mcp", "-c", "/path/to/tessella.yaml"]}}}
-```
-
-</details>
-
-## Usage
-
-<details>
-<summary><b>⌨️ Every command</b></summary>
+<summary>⌨️ <b>Usage</b></summary>
 
 | Command | What it does |
 | --- | --- |
@@ -1181,10 +1076,9 @@ Files Tessella writes, all under `.tessella/` in the working directory:
 
 </details>
 
-## Configuration
-
+<a id="configuration"></a>
 <details>
-<summary><b>⚙️ Every setting</b></summary>
+<summary>⚙️ <b>Configuration</b></summary>
 
 All settings live in `tessella.yaml` (see `tessella.example.yaml`). Secrets are never written in
 the file: it names environment variables (`password_env`, `token_env`) instead.
@@ -1251,10 +1145,9 @@ A class goes to a cloud model only if it is in `may_leave` and not in `never_lea
 
 </details>
 
-## Running in CI
-
+<a id="running-in-ci"></a>
 <details>
-<summary><b>💬 GitHub Actions, PR comments and keeping the database</b></summary>
+<summary>💬 <b>Running in CI</b></summary>
 
 `tessella ci` is designed to run after your tests, only when they fail, and never to break the
 build itself. Example for GitHub Actions:
@@ -1334,10 +1227,191 @@ in the same job image as your tests. In CI, point the model roles at a team mode
 
 </details>
 
-## What works today
+<a id="findings-from-schemathesis-and-zap"></a>
+<details>
+<summary>🧪 <b>Findings from Schemathesis and ZAP</b></summary>
+
+Tessella does not send exploratory traffic to your system. Two established tools do that well,
+and their reports go into `tessella triage` next to your test reports:
+
+```bash
+# API: property-based tests from your OpenAPI schema
+schemathesis run https://staging.shop.local/openapi.json --report junit --report-dir st-report
+# Web security: ZAP baseline scan (Docker), traditional JSON report
+docker run -v "$PWD:/zap/wrk" -t ghcr.io/zaproxy/zaproxy:stable \
+  zap-baseline.py -t https://staging.shop.local -J zap.json
+
+tessella triage st-report/*.xml zap.json
+```
+
+- Each failing Schemathesis example and each ZAP alert becomes a probe finding with a severity
+  (`info` to `critical`), the request that shows it (the curl line Schemathesis prints, or
+  the ZAP URL and parameter) and the report text as cited evidence.
+- Findings are clustered, recalled and reviewed like failed tests, and the ticket's steps to
+  reproduce are the request itself.
+- No model is needed when the check leaves no doubt: a 5xx (ST101/ST102), a resource that
+  did not appear or disappear as promised (ST301/ST302), auth ignored or another user's data
+  (ST401/ST402), or a ZAP alert you marked Confirmed. These are product bugs. Schema
+  conformance problems and unconfirmed alerts go to the reader model.
+- `probe.min_severity` (default `low`) leaves out findings below it; ZAP informational
+  alerts and alerts marked false positive in ZAP never reach the queue.
+- Secrets are masked on the way in: header values for `Authorization`, `Cookie`,
+  `X-Api-Key` and every name in `redact`, plus the usual token patterns.
+
+</details>
+
+<a id="offline-in-containers-and-for-a-team"></a>
+<a id="offline-mode-proof-that-nothing-leaves"></a>
+<a id="offline-bundle-install-on-a-machine-with-no-internet"></a>
+<a id="containers"></a>
+<a id="a-team-server"></a>
+<a id="mcp-server-for-coding-assistants"></a>
+<details>
+<summary>📦 <b>Offline, in containers, and for a team</b></summary>
 
 <details>
-<summary><b>✅ Exactly how each part was tested</b></summary>
+<summary><b>Offline mode: proof that nothing leaves</b></summary>
+
+`tessella --offline <command>` (or `TESSELLA_OFFLINE=1`) refuses every network connection
+that is not loopback, from any code in the process: Tessella, a library, a raw socket, a DNS
+lookup. It works below `net.py`, through a Python audit hook, so it also catches what the
+allowlist cannot see. Each refused attempt is printed at the end of the run, and `triage`
+exits 3 if there was one, so a CI job fails on the first leak instead of passing quietly.
+Hosts inside your network that offline mode may still reach, such as a team model server, go
+in `network.offline_allow`.
+
+The other global option, `tessella --show-thinking <command>` (or `TESSELLA_SHOW_THINKING=1`),
+turns thinking on for that run (every Ollama call is sent with `think: true`, overriding the
+role's `think` in `tessella.yaml`, which is left as it is; slower on CPU), prints what the local
+model thinks while it answers, dimmed on stderr under a header per call, and appends each
+call's thinking and answer to `.tessella/thinking.jsonl`. It says once which config it loaded
+and what `think` that config has; a model that still returns no thinking is named with its role.
+
+`scripts/zero-egress.sh` adds the kernel as a second guard, for child processes too (a test
+re-run, git): it runs Tessella in a new network namespace whose only interface is loopback,
+starts the model server inside it, and turns offline mode on.
+
+```bash
+bash scripts/zero-egress.sh triage --no-rerun     # Linux; exit 3 means something tried to leave
+# it starts the project's Ollama inside the namespace, with the models from .tessella/models
+```
+
+</details>
+
+<details>
+<summary><b>Offline bundle: install on a machine with no internet</b></summary>
+
+On a connected machine, from the Tessella source folder:
+
+```bash
+tessella bundle -o tessella-bundle.tar                  # wheels + your local Ollama models
+tessella bundle --python-version 3.12 --platform manylinux2014_x86_64 \
+  --ollama ollama-linux-amd64.tgz                       # for another machine, with Ollama itself
+```
+
+The archive holds every dependency as a wheel pinned by SHA-256 (`requirements.lock`), the
+Ollama model files your local roles use (manifests and blobs, from the project's
+`.tessella/models`), optionally the Ollama program, a `MANIFEST.json` with the SHA-256 of every
+file, and `install.py`, which needs only the Python standard library. On the offline machine:
+
+```bash
+tar -xf tessella-bundle.tar
+python3 tessella-bundle/install.py --venv .venv --models-dir .tessella/models
+```
+
+Every file is checked against the manifest first; if one does not match, nothing is installed.
+Wheels are installed with `pip --no-index --require-hashes`, models are copied where Ollama
+finds them. Upgrading later: `tessella install --from tessella-bundle.tar`.
+
+</details>
+
+<details>
+<summary><b>Containers</b></summary>
+
+`Dockerfile` builds one image for laptops, CI and servers: base image pinned by digest, every
+dependency pinned by hash (`requirements.lock`), a non-root user, and a CycloneDX SBOM of the
+installed packages at `/opt/sbom.cdx.json`. `compose.yaml` runs it next to an Ollama server:
+
+```bash
+export TESSELLA_UID=$(id -u) TESSELLA_GID=$(id -g)  # files it writes in your project are yours
+docker compose up -d ollama queue                  # queue on http://127.0.0.1:8484
+docker compose run --rm triage                     # triage with no route to the internet
+```
+
+The model server sits on a Docker network with no way out, and triage shares its network
+namespace: it reaches the model on loopback (your `tessella.yaml` works unchanged) and nothing
+else, with offline mode on as well. Models come from `./.tessella/models` (override with
+`TESSELLA_MODELS`); the server cannot download any, so bring them with a bundle. The queue is
+published on this machine's loopback only, and has its own network to file approved tickets.
+
+</details>
+
+<details>
+<summary><b>A team server</b></summary>
+
+`deploy/team/compose.yaml` runs one GPU machine for everyone: vLLM behind an API key, and the
+review queue several reviewers sign in to over HTTPS.
+
+- **Shared model.** Laptops and CI point a role at it with the key in an environment variable:
+  `{provider: hosted_vllm, name: ..., base_url: "https://gpu-box.lan:8000/v1", api_key_env:
+  TESSELLA_MODEL_KEY}`. The key is sent as a Bearer token; it is never in the config.
+- **Shared queue.** `tessella queue --host 0.0.0.0 --tls-cert cert.pem --tls-key key.pem`
+  with `team.reviewers` in the config (`{anna: TESSELLA_PW_ANNA, ...}`: each reviewer's
+  password lives in an environment variable on the server). Every page asks for a reviewer's
+  name and password, and each decision records who made it, whatever the form says. The queue
+  refuses to listen beyond loopback without reviewers.
+- **Getting runs in.** Run triage on the server against its store, or have CI upload its
+  `.tessella/tessella.sqlite` and `tessella merge` it into the server's. The store uses SQLite
+  in WAL mode, so the queue keeps reading while a triage writes. One queue process owns the
+  file; that covers a team on one server without a database server to run.
+
+</details>
+
+<details>
+<summary><b>MCP server for coding assistants</b></summary>
+
+`tessella mcp` (`pip install 'tessella[mcp]'`) serves cases, evidence and verdicts over the
+Model Context Protocol (stdio), so a developer's own coding assistant can answer "why does
+this test fail?" from Tessella's cited evidence. Tools: `list_cases`, `get_case`,
+`find_cases`, `cases_for_file` (cases whose stack or test id mentions the file you are
+editing) and `recent_runs`. It is read-only: nothing can be approved or filed through it. If
+the assistant uses a cloud model, set `mcp.excerpts: false` to serve summaries, verdicts and
+tickets without log lines, stacks or the reproduce request. Example client entry:
+
+```json
+{"mcpServers": {"tessella": {"command": "tessella", "args": ["mcp", "-c", "/path/to/tessella.yaml"]}}}
+```
+
+</details>
+
+</details>
+
+## 🛡 Trust
+
+<a id="security-and-privacy"></a>
+<details>
+<summary>🔐 <b>Security and privacy</b></summary>
+
+- **Network:** every outbound HTTP request goes through one client that refuses hosts outside
+  `network.allow`. `tessella doctor --egress` demonstrates it. Offline mode (`--offline`)
+  refuses every non-loopback connection from any code in the process, and
+  `scripts/zero-egress.sh` adds a network namespace with no route out.
+- **Models:** every call passes the data policy and is written to the audit log. Screenshots and
+  raw logs never go to a cloud model with the default policy.
+- **Secrets:** read from environment variables only; masked in text and headers as data is read.
+- **Storage:** everything stays in `.tessella/` on the machine that runs Tessella. Nothing is sent
+  to the Tessella authors: there is no telemetry.
+- **Review:** nothing is filed to Jira or written to your repository without a person's approval.
+
+Known gap: for cloud roles, LiteLLM's own HTTP traffic does not go through `net.py` (the gateway
+checks the model host against the allowlist before every call). Local roles do go through
+`net.py`, and offline mode refuses cloud traffic whatever its client.
+
+</details>
+
+<a id="what-works-today"></a>
+<details>
+<summary>✅ <b>What works today</b></summary>
 
 Exactly how each part was tested. "Tested" means covered by the unit tests in `tests/`.
 
@@ -1382,10 +1456,38 @@ Exactly how each part was tested. "Tested" means covered by the unit tests in `t
 
 </details>
 
-## Roadmap
-
+<a id="faq"></a>
 <details>
-<summary><b>🗺 v1 Triage, v2 Probe, v3 Continuous</b></summary>
+<summary>❓ <b>FAQ</b></summary>
+
+**Is it free?** Yes, for now: it is open source under Apache-2.0. See [Pricing](#pricing).
+
+**Do I need a GPU or a cloud account?** No. Collecting, clustering, re-runs and visual diffs need
+no model. For verdicts, a local model on a laptop is the default; cloud models are optional.
+
+**Will it file tickets on its own?** No. It only drafts. A person approves every ticket.
+
+**Does it replace ReportPortal or Allure?** No. Keep them for reporting and history. Tessella reads
+their output and adds the investigation and the tickets.
+
+**Which frameworks does it support?** Any framework that produces JUnit XML, plus richer support
+for Playwright HTML reports and traces, Allure and pytest-html.
+
+**What happens if the model is unsure?** The verdict becomes `unknown`, it is shown with its
+evidence, and no ticket is drafted.
+
+**Can we use our own model server?** Yes. Ollama (`ollama_chat`), llama.cpp server, vLLM
+(`vllm`, `hosted_vllm`) and LM Studio (`lm_studio`) are called directly. For another
+self-hosted server that speaks the same `/v1/chat/completions` format, set `location: local`
+so it is treated as inside your network. Cloud providers work through LiteLLM.
+
+</details>
+
+## 🗺 Project
+
+<a id="roadmap"></a>
+<details>
+<summary>🗺 <b>Roadmap</b></summary>
 
 1. **Validate (3–4 weeks):** interviews with SDETs, QA leads and security; a smoke-test page;
    two concierge pilots on real failures.
@@ -1400,10 +1502,9 @@ Exactly how each part was tested. "Tested" means covered by the unit tests in `t
 
 </details>
 
-## Development
-
+<a id="development"></a>
 <details>
-<summary><b>🔧 Adding readers, checks and model calls</b></summary>
+<summary>🔧 <b>Development</b></summary>
 
 ```bash
 pip install -e ".[dev]"
@@ -1426,56 +1527,6 @@ Every stage has its own tests in `tests/`. Model calls are never made in tests: 
 declare the data classes the payload contains. Never call a model library directly.
 
 **Add network access:** always use `net.client(allow)`. Never create an HTTP client directly.
-
-</details>
-
-## Security and privacy
-
-<details>
-<summary><b>🛡 Network, models, secrets and storage</b></summary>
-
-- **Network:** every outbound HTTP request goes through one client that refuses hosts outside
-  `network.allow`. `tessella doctor --egress` demonstrates it. Offline mode (`--offline`)
-  refuses every non-loopback connection from any code in the process, and
-  `scripts/zero-egress.sh` adds a network namespace with no route out.
-- **Models:** every call passes the data policy and is written to the audit log. Screenshots and
-  raw logs never go to a cloud model with the default policy.
-- **Secrets:** read from environment variables only; masked in text and headers as data is read.
-- **Storage:** everything stays in `.tessella/` on the machine that runs Tessella. Nothing is sent
-  to the Tessella authors: there is no telemetry.
-- **Review:** nothing is filed to Jira or written to your repository without a person's approval.
-
-Known gap: for cloud roles, LiteLLM's own HTTP traffic does not go through `net.py` (the gateway
-checks the model host against the allowlist before every call). Local roles do go through
-`net.py`, and offline mode refuses cloud traffic whatever its client.
-
-</details>
-
-## FAQ
-
-<details>
-<summary><b>❓ Common questions</b></summary>
-
-**Is it free?** Yes, for now: it is open source under Apache-2.0. See [Pricing](#pricing).
-
-**Do I need a GPU or a cloud account?** No. Collecting, clustering, re-runs and visual diffs need
-no model. For verdicts, a local model on a laptop is the default; cloud models are optional.
-
-**Will it file tickets on its own?** No. It only drafts. A person approves every ticket.
-
-**Does it replace ReportPortal or Allure?** No. Keep them for reporting and history. Tessella reads
-their output and adds the investigation and the tickets.
-
-**Which frameworks does it support?** Any framework that produces JUnit XML, plus richer support
-for Playwright HTML reports and traces, Allure and pytest-html.
-
-**What happens if the model is unsure?** The verdict becomes `unknown`, it is shown with its
-evidence, and no ticket is drafted.
-
-**Can we use our own model server?** Yes. Ollama (`ollama_chat`), llama.cpp server, vLLM
-(`vllm`, `hosted_vllm`) and LM Studio (`lm_studio`) are called directly. For another
-self-hosted server that speaks the same `/v1/chat/completions` format, set `location: local`
-so it is treated as inside your network. Cloud providers work through LiteLLM.
 
 </details>
 

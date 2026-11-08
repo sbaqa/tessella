@@ -186,3 +186,18 @@ def test_decided_failures_link_to_allure_too(tmp_path, monkeypatch):
                  inputs={"reports": ["reports/allure-report"]})
     page = TestClient(create_app(s)).get("/").text
     assert 'href="/reports/0/#testresult/def456"' in page
+
+
+def test_queue_lists_bug_drafts_first(tmp_path):
+    from tessella.models import Draft, DraftKind
+
+    store = Store(tmp_path / "t.sqlite")
+    def case(i, category, draft):
+        return Case(id=i, origin=Origin.test_failure, title=f"test_{i}", signature=f"s{i}",
+                    verdict=Verdict(category=category, confidence=0.9, root_cause="x"),
+                    draft=Draft(kind=DraftKind.ticket, title=f"title_{i}", body="b") if draft else None)
+    for c in (case("flaky1", Category.flaky, False), case("tbug1", Category.test_bug, True),
+              case("pbug1", Category.product_bug, True)):
+        store.save_case(c)
+    page = _queue(tmp_path).get("/").text
+    assert page.index("title_pbug1") < page.index("title_tbug1") < page.index("test_flaky1")

@@ -78,7 +78,7 @@ def create_app(settings: Settings):
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request):
         _reconcile_tickets()
-        cases = store.open_cases()
+        cases = sorted(store.open_cases(), key=_review_order)  # the bug drafts first
         store.mark_shown([c.id for c in cases])  # starts the review clock for "time saved"
         decisions = store.recent_decisions(current=True)
         return templates.TemplateResponse(
@@ -165,6 +165,12 @@ def create_app(settings: Settings):
         return RedirectResponse("/", status_code=303)
 
     return app
+
+
+def _review_order(case) -> int:
+    """What most needs a person comes first: product bugs, test bugs, then the rest."""
+    category = case.verdict.category if case.verdict and case.draft else None
+    return {"product_bug": 0, "test_bug": 1}.get(category, 2)
 
 
 def _report_dirs(settings: Settings) -> list[Path]:
