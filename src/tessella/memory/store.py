@@ -157,6 +157,14 @@ class Store:
             row = self.db.execute("SELECT payload FROM cases WHERE id = ?", (case_id,)).fetchone()
         return Case.model_validate_json(row[0]) if row else None
 
+    def case_with_signature(self, signature: str) -> Case | None:
+        """The most recent stored case for a failure, whatever test it came from: a renamed
+        or moved test keeps its signature but gets a new case id."""
+        with self._lock:
+            row = self.db.execute("SELECT payload FROM cases WHERE signature = ? "
+                                  "ORDER BY created_at DESC LIMIT 1", (signature,)).fetchone()
+        return Case.model_validate_json(row[0]) if row else None
+
     def open_cases(self) -> list[Case]:
         """Cases whose current failure has no decision. A decision belongs to one failure: when
         the same test later fails differently (a new signature), that is a new question."""

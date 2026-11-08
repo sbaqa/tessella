@@ -245,9 +245,9 @@ def _app(settings: Settings, copy: Path):
     import httpx
 
     port = _free_port()
+    errors = tempfile.TemporaryFile(mode="w+")  # why it died, if it does
     proc = subprocess.Popen(f.app_command.format(port=port), shell=True, cwd=copy,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                            start_new_session=True)
+                            stdout=subprocess.DEVNULL, stderr=errors, start_new_session=True)
     url = f"http://127.0.0.1:{port}"
     try:
         deadline = time.monotonic() + 30
@@ -257,7 +257,9 @@ def _app(settings: Settings, copy: Path):
                 break
             except httpx.HTTPError:
                 if proc.poll() is not None:
-                    raise RuntimeError("the app exited while starting from the copy")
+                    errors.seek(0)
+                    raise RuntimeError("the app exited while starting from the copy: "
+                                       + errors.read()[-900:].strip())
                 time.sleep(0.3)
         else:
             raise RuntimeError("the app did not answer within 30 s")
@@ -270,6 +272,7 @@ def _app(settings: Settings, copy: Path):
         except (ProcessLookupError, PermissionError):
             proc.terminate()
         proc.wait(timeout=10)
+        errors.close()
 
 
 def _suite(settings: Settings, cwd: Path, env: dict) -> set[str] | None:
@@ -326,19 +329,22 @@ def check(case: Case, settings: Settings, box: Sandbox,
     from tessella.investigate.rerun import run_once
 
     attempts = max(1, settings.rerun.attempts)
-    with _app(settings, box.copy) as env:
-        results = [run_once(case, settings.rerun.command, cwd=box.copy, repo=box.copy, env=env)
-                   for _ in range(attempts)]
-        if any(p is None for p, _ in results):
-            return False, "could not run the test: " + next(o for p, o in results if p is None)[-800:]
-        passed = sum(1 for p, _ in results if p)
-        if passed < attempts:
-            out = next(o for p, o in results if not p)
-            return False, f"the test still fails ({passed} of {attempts} passed):\n{out[-1500:]}"
-        failing = _suite(settings, box.copy, env) if baseline is not None else None
-        if failing is not None and failing - baseline:
-            again = _suite(settings, box.copy, env)  # a flaky test must fail twice to count
-            failing = baseline | ((failing - baseline) & (again if again is not None else failing))
+    try:
+        with _app(settings, box.copy) as env:
+            results = [run_once(case, settings.rerun.command, cwd=box.copy, repo=box.copy, env=env)
+                       for _ in range(attempts)]
+            if any(p is None for p, _ in results):
+                return False, "could not run the test: " + next(o for p, o in results if p is None)[-800:]
+            passed = sum(1 for p, _ in results if p)
+            if passed < attempts:
+                out = next(o for p, o in results if not p)
+                return False, f"the test still fails ({passed} of {attempts} passed):\n{out[-1500:]}"
+            failing = _suite(settings, box.copy, env) if baseline is not None else None
+            if failing is not None and failing - baseline:
+                again = _suite(settings, box.copy, env)  # a flaky test must fail twice to count
+                failing = baseline | ((failing - baseline) & (again if again is not None else failing))
+    except RuntimeError as exc:  # the edit broke the app: tell the model, let it try again
+        return False, str(exc)
     if failing is None:
         return True, (f"verified: the failing test passed {passed} of {attempts} re-run(s); "
                       "the rest of the suite was not run (set fix.suite_command)")

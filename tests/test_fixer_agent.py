@@ -148,3 +148,23 @@ def test_edits_match_loose_indentation_and_refuse_ambiguity():
     assert loose == "def f():\n    x = 2\n    return x\n"
     assert fixer_agent.replace_once(text, "x", "y").startswith("\0")  # several matches
     assert fixer_agent.replace_once(text, "    2  x = 1", "x = 3").startswith("\0") is False
+
+
+def test_an_edit_that_breaks_the_app_is_reported_back_not_fatal(tmp_path, monkeypatch):
+    s, case = _setup(tmp_path)
+    (tmp_path / "server.py").write_text("import app\nimport time\ntime.sleep(30)\n")
+    s.fix.app_command = f"{sys.executable} server.py # {{port}}"
+    s.fix.suite_command = None
+    bad = {"old": "    return RULES[code]", "new": "    return RULES[code"}  # a syntax error
+
+    import httpx
+
+    def get(url, timeout=None):  # stands in for the server: up only if app.py still imports
+        raise httpx.ConnectError("not up")
+
+    monkeypatch.setattr(httpx, "get", get)
+    sent = _replies(monkeypatch, {"thought": "t", "tool": "edit", "path": "app.py", **bad},
+                    {"thought": "stop", "tool": "give_up"})
+    diff, status = fixer_agent.run(case, s)
+    assert diff == "" and status.startswith("no fix: the fixer gave up")
+    assert "the app exited while starting" in sent[1] and "SyntaxError" in sent[1]

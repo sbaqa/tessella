@@ -1,0 +1,70 @@
+# Tessella settings for the Mosaic Market demo. Run tessella from this folder.
+inputs:
+  # Only the Allure report: junit.xml holds the same failures and would make duplicates.
+  reports: ["reports/allure-report"]
+  traces: ["test-results/**/trace.zip"]
+  repo: .
+
+models:
+  # One small local model reads both logs and screenshots; fits a 16 GB CPU-only laptop.
+  reader:
+    provider: ollama_chat
+    name: qwen3.5:4b
+    base_url: http://127.0.0.1:11435
+    think: false
+    num_ctx: 11435
+    max_steps_per_cluster: 4
+  vision:
+    provider: ollama_chat
+    name: qwen3.5:4b
+    base_url: http://127.0.0.1:11435
+    think: false
+    num_ctx: 11435
+
+rerun:
+  # A separate --output folder, because pytest-playwright empties test-results/ on every
+  # run, and the traces there are what tessella probe reads.
+  command: "pytest {test_id} -q --output .tessella/rerun-results"
+  attempts: 3                  # three tries makes the flaky recommendations test easy to spot
+
+logs:
+  source: file
+  path: logs/app.log
+  window_seconds: 120
+
+probe:
+  base_url: http://127.0.0.1:8765
+  scope:
+    include: ["/api/*"]
+    exclude: ["/api/health", "/api/test/*"]
+  identities:
+    user_a: { login_url: /api/auth/login, username: anna, password_env: A_PASS }
+    user_b: { login_url: /api/auth/login, username: bob, password_env: B_PASS }
+  mutators: [boundaries, types, identity, order, concurrency]
+
+# Approved drafts are filed here once you set up a board. Secrets come from the env var named
+# below, never inline.
+# board: jira
+# jira:
+#   url: https://your-site.atlassian.net   # site base only
+#   project: KAN                           # the project key
+#   email: you@example.com                 # Atlassian Cloud account email
+#   token_env: JIRA_TOKEN                  # NAME of the env var holding the token
+#   issue_type: Task                       # whichever type your project has
+
+network:
+  allow: ["127.0.0.1:11435", "localhost:11435"]   # add your Jira host when you set up a board
+
+redact: ["Authorization", "Cookie", "password", "token"]
+
+storage:
+  path: .tessella/tessella.sqlite
+
+# The fixer agent proposes checked fixes for product bugs. Uncomment to turn it on, and add
+# `fixer: {provider: ollama_chat, name: "qwen3.5:4b", base_url: "http://127.0.0.1:11435"}`
+# under models.
+# fix:
+#   app_command: "python -m uvicorn shop.app:app --port {port}"
+#   app_url_env: DEMO_SHOP_URL
+#   app_ready_path: /api/health
+#   suite_command: "pytest -q tests/api"

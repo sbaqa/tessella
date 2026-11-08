@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 260" role="img" aria-label="Tessella">
+  <rect width="1200" height="260" fill="#1c2530"/>
+  <g id="t">
+    <rect x="40" y="30" width="60" height="60" fill="#2f5fd0"/><rect x="104" y="30" width="60" height="60" fill="#c2551b"/><rect x="168" y="30" width="60" height="60" fill="#1f8a83"/>
+    <rect x="40" y="94" width="60" height="60" fill="#d6a21e"/><rect x="104" y="94" width="60" height="60" fill="#a3242c" opacity=".9"/><rect x="168" y="94" width="60" height="60" fill="#2f5fd0" opacity=".55"/>
+    <rect x="40" y="158" width="60" height="60" fill="#1f8a83" opacity=".6"/><rect x="104" y="158" width="60" height="60" fill="#d6a21e" opacity=".55"/><rect x="168" y="158" width="60" height="60" fill="#c2551b" opacity=".6"/>
+  </g>
+  <text x="270" y="125" fill="#f7f8f5" font-family="Avenir Next, Segoe UI, Helvetica, Arial, sans-serif" font-size="78" font-weight="800" letter-spacing="-2">Tessella</text>
+  <text x="272" y="175" fill="#c9cfc6" font-family="Avenir Next, Segoe UI, Helvetica, Arial, sans-serif" font-size="27">Every failed test is one tile. Tessella shows you the picture.</text>
+  <rect x="980" y="30" width="60" height="60" fill="#2f5fd0" opacity=".35"/><rect x="1044" y="30" width="60" height="60" fill="#1f8a83" opacity=".5"/><rect x="1108" y="30" width="60" height="60" fill="#d6a21e" opacity=".7"/>
+  <rect x="1044" y="94" width="60" height="60" fill="#c2551b" opacity=".35"/><rect x="1108" y="94" width="60" height="60" fill="#a3242c" opacity=".55"/><rect x="1108" y="158" width="60" height="60" fill="#2f5fd0" opacity=".3"/>
+</svg>

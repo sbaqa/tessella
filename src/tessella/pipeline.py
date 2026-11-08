@@ -289,7 +289,9 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
         if past is not None:
             result.recalled += 1
             result.decisions[signature] = past
-            prior = store.get_case(lead.id)  # keeps its original verdict/draft; recall never re-saves
+            # keeps its original verdict/draft; recall never re-saves. By signature as a
+            # fallback: a test that moved or was renamed has a new id but the same failure.
+            prior = store.get_case(lead.id) or store.case_with_signature(lead.signature)
             note = (f"Already {past.action}"
                     + (f" as {past.reason}" if past.reason else "")
                     + (f" → {past.ticket_key}" if past.ticket_key else "")

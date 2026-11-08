@@ -86,3 +86,15 @@ def test_a_test_that_fails_differently_is_a_new_question(tmp_path):
     reopened = Store(str(tmp_path / "t.sqlite"))  # reopening runs the dedupe; both survive
     assert reopened.last_decision("newsig").action == Action.reject
     assert reopened.last_decision("oldsig").action == Action.approve
+
+
+def test_a_recalled_failure_from_a_moved_test_keeps_its_verdict(tmp_path):
+    from tessella.memory.store import Store
+
+    store = Store(str(tmp_path / "t.sqlite"))
+    old = _case("oldid")
+    old.signature = "sig"
+    store.save_case(old)
+    assert store.get_case("newid") is None
+    found = store.case_with_signature("sig")
+    assert found.id == "oldid" and found.verdict.category == Category.product_bug

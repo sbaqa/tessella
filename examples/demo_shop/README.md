@@ -104,6 +104,12 @@ pip install -r requirements.txt        # starlette, uvicorn, pytest, allure-pyte
 playwright install chromium            # the browser the UI tests drive (about 150 MB)
 ```
 
+Then give the demo its settings (your own `tessella.yaml` is never committed):
+
+```bash
+cp tessella.example.yaml tessella.yaml
+```
+
 Check it worked:
 
 ```bash
