@@ -1,0 +1,108 @@
+name: Tessella triage
+description: Explain why tests failed with a local model on the runner, and comment on the pull request.
+branding:
+  icon: search
+  color: blue
+
+inputs:
+  reports:
+    description: Test reports to read, separated by spaces. Default is inputs.reports in your config.
+    default: ""
+  config:
+    description: Path to the Tessella config, from working-directory.
+    default: tessella.yaml
+  working-directory:
+    description: Where to run Tessella. Your config and .tessella folder live here.
+    default: "."
+  use-model:
+    description: Judge failures with a local model. With false, failures are only grouped.
+    default: "true"
+  rerun:
+    description: Re-run each failing test first, which is how flaky tests are told apart.
+    default: "true"
+  comment:
+    description: Post the summary on the pull request. Needs pull-requests write permission.
+    default: "true"
+  minutes:
+    description: Stop asking the model after this long. Failures left over are reported as not judged.
+    default: "25"
+  ollama-version:
+    description: Ollama release to install on the runner.
+    default: "0.32.4"
+
+runs:
+  using: composite
+  steps:
+    # Its own environment, off PATH, so re-runs still use your project's pytest and packages.
+    - id: python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        update-environment: false
+    - name: Install Tessella
+      shell: bash
+      env:
+        PYTHON: ${{ steps.python.outputs.python-path }}
+      run: |
+        "$PYTHON" -m venv "$RUNNER_TEMP/tessella"
+        "$RUNNER_TEMP/tessella/bin/pip" install -q "${GITHUB_ACTION_PATH}[vision,html]"
+
+    - name: Restore what Tessella remembers
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.working-directory }}/.tessella/tessella.sqlite
+        key: tessella-db-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: tessella-db-
+
+    # One download per config: the model is cached between runs.
+    - name: Restore the model
+      if: inputs.use-model == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.working-directory }}/.tessella/models
+        key: tessella-models-${{ runner.os }}-${{ hashFiles(format('{0}/{1}', inputs.working-directory, inputs.config)) }}
+    - name: Install the model
+      id: model
+      if: inputs.use-model == 'true'
+      continue-on-error: true  # no model is a grouped summary, not a failed job
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        OLLAMA_VERSION: ${{ inputs.ollama-version }}
+        CONFIG: ${{ inputs.config }}
+      run: |
+        command -v ollama >/dev/null || curl -fsSL https://ollama.com/install.sh | sh
+        sudo systemctl stop ollama 2>/dev/null || true  # Tessella runs its own server
+        "$RUNNER_TEMP/tessella/bin/tessella" models pull --config "$CONFIG"
+
+    - name: Triage the failures
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        REPORTS: ${{ inputs.reports }}
+        CONFIG: ${{ inputs.config }}
+        MINUTES: ${{ inputs.minutes }}
+        COMMENT: ${{ inputs.comment }}
+        RERUN: ${{ inputs.rerun }}
+        HAS_MODEL: ${{ steps.model.outcome == 'success' }}
+      run: |
+        args=(ci --config "$CONFIG" --minutes "$MINUTES")
+        [ "$COMMENT" = "true" ] && args+=(--comment)
+        [ "$RERUN" = "true" ] || args+=(--no-rerun)
+        [ "$HAS_MODEL" = "true" ] || args+=(--no-model)
+        read -ra reports <<< "$REPORTS"
+        "$RUNNER_TEMP/tessella/bin/tessella" "${args[@]}" "${reports[@]}"
+
+    - name: Build the report
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CONFIG: ${{ inputs.config }}
+      run: '"$RUNNER_TEMP/tessella/bin/tessella" report --config "$CONFIG" -o tessella-report.html'
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: tessella-report
+        path: ${{ inputs.working-directory }}/tessella-report.html

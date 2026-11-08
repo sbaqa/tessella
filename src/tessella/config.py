@@ -228,6 +228,9 @@ class Ci(BaseModel):
     token_env: str | None = None
     # Linked from the comment, e.g. a team queue: https://tessella.lan:8484
     queue_url: str | None = None
+    # Stop asking the model after this many minutes; failures left over are reported as not
+    # judged. A CPU runner is slow, and a CI job has a time limit. None: no limit.
+    max_minutes: float | None = None
 
 
 class OllamaLocal(BaseModel):

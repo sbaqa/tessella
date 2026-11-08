@@ -53,7 +53,7 @@
               border-radius: 8px; padding: 0.8rem 1rem; margin: 0 0 1.4rem; }
     h2 { font-size: 1.05rem; margin: 2rem 0 0.8rem; }
 
-    .case { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin: 0 0 1.1rem;
+    .case { scroll-margin-top: 5rem; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin: 0 0 1.1rem;
             border-left: 5px solid var(--hue, var(--none)); overflow: hidden; }
     .case > .head { padding: 1rem 1.2rem 0.6rem; }
     .chips { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.4rem; }
@@ -83,6 +83,21 @@
     details.ev pre { margin: 0; padding: 0.6rem 0.8rem; border-top: 1px solid var(--line); white-space: pre-wrap;
                      overflow-wrap: anywhere; max-height: 18rem; overflow: auto; }
     pre.patch { background: var(--panel-2); padding: 0.6rem 0.8rem; border-radius: 8px; white-space: pre-wrap; }
+
+    .ticket-head { display: flex; align-items: center; gap: 0.6rem; justify-content: space-between; margin: 1.1rem 0 0.5rem; }
+    .ticket-head .section-title { margin: 0; }
+    .ticket-head form { margin: 0; }
+    .ticket-tools { display: flex; gap: 0.4rem; }
+    .small { padding: 0.3rem 0.7rem; font-size: 0.82rem; }
+    .changed { color: var(--focus); font-size: 0.74rem; font-weight: 700; margin-left: 0.3rem; }
+    form.edit { display: grid; gap: 0.7rem; }
+    form.edit[hidden], dl.ticket[hidden], .actions[hidden], .ticket-tools[hidden] { display: none; }
+    form.edit label { display: grid; gap: 0.25rem; color: var(--ink-3); font-size: 0.86rem; font-weight: 600; }
+    form.edit input[type=text], form.edit textarea { font: inherit; font-size: 0.95rem; color: var(--ink); background: var(--panel);
+      border: 1px solid var(--line); border-radius: 8px; padding: 0.5rem 0.6rem; width: 100%; }
+    form.edit textarea { resize: vertical; field-sizing: content; min-height: 3.2em; }
+    form.edit .buttons { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    form.edit .buttons .note { color: var(--ink-3); font-size: 0.82rem; }
 
     .actions { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; padding: 0.9rem 1.2rem;
                border-top: 1px solid var(--line); background: var(--panel-2); margin-top: 0.8rem; }
@@ -120,6 +135,10 @@
 <body>
 {% set labels = {'product_bug': 'Product bug', 'test_bug': 'Test bug', 'flaky': 'Flaky', 'environment': 'Environment',
                  'test_data': 'Test data', 'unknown': 'Unclear'} %}
+{% set ticket_fields = [('description', 'Description'), ('steps_to_reproduce', 'Steps to reproduce'),
+                        ('actual_result', 'Actual result'), ('expected_result', 'Expected result'),
+                        ('environment', 'Environment'), ('root_cause', 'Root cause (suspected)'),
+                        ('suggested_fix', 'Suggested fix')] %}
 {% set reason_labels = {'not_a_bug': 'Not a bug', 'test_bug': 'Test bug', 'environment': 'Environment problem',
                         'test_data': 'Test data problem', 'flaky': 'Flaky', 'duplicate': 'Duplicate'} %}
 <header class="top">
@@ -158,24 +177,39 @@
     <div class="head">
       <div class="chips">
         <span class="chip cat"><i></i>{{ labels.get(cat, 'No verdict yet') }}{% if case.verdict %} · {{ '%.0f' % (case.verdict.confidence * 100) }}% sure{% endif %}</span>
-        {% if case.draft %}<span class="chip">Ticket draft ready</span>{% else %}<span class="chip">Nothing to file</span>{% endif %}
+        {% if case.draft and case.draft.edited_by %}<span class="chip">Edited by {{ case.draft.edited_by }}</span>
+        {% elif case.draft %}<span class="chip">Ticket draft ready</span>{% else %}<span class="chip">Nothing to file</span>{% endif %}
         {% if allure[case.id] %}<a class="chip" href="{{ allure[case.id] }}" target="_blank" rel="noopener">Open in Allure &#8599;</a>{% endif %}
       </div>
-      <h3>{{ case.draft.title if case.draft else case.title }}</h3>
+      <h3 data-view="{{ case.id }}">{{ case.draft.title if case.draft else case.title }}{% if case.draft and 'title' in case.draft.original %}<span class="changed">edited</span>{% endif %}</h3>
       <p class="test">{{ case.test_id or case.title }}</p>
     </div>
     <p class="todo">{{ todo[case.id] }}</p>
     <div class="body">
       {% if case.draft %}
-      <div class="section-title">The ticket that approving files</div>
-      <dl class="ticket">
-        <dt>Description</dt><dd>{{ case.draft.description }}</dd>
-        <dt>Steps to reproduce</dt><dd><pre>{{ case.draft.steps_to_reproduce }}</pre></dd>
-        <dt>Actual result</dt><dd>{{ case.draft.actual_result }}</dd>
-        <dt>Expected result</dt><dd>{{ case.draft.expected_result }}</dd>
-        <dt>Environment</dt><dd>{{ case.draft.environment }}</dd>
-        <dt>Root cause (suspected)</dt><dd>{{ case.draft.root_cause }}</dd>
-        <dt>Suggested fix</dt><dd>{{ case.draft.suggested_fix }}</dd>
+      <div class="ticket-head">
+        <div class="section-title">The ticket that approving files</div>
+        <div class="ticket-tools" data-view="{{ case.id }}">
+          {% if case.draft.original %}<form method="post" action="/cases/{{ case.id }}/undo-edits"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="small quiet">Undo my edits</button></form>{% endif %}
+          <button type="button" class="small" data-edit="{{ case.id }}">Edit draft</button>
+        </div>
+      </div>
+      <form class="edit" id="edit-{{ case.id }}" method="post" action="/cases/{{ case.id }}/edit" hidden>
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label>Title<input type="text" name="title" value="{{ case.draft.title }}" maxlength="255" required></label>
+        {% for name, label in ticket_fields %}
+        <label>{{ label }}<textarea name="{{ name }}" rows="{{ 4 if name == 'steps_to_reproduce' else 2 }}">{{ case.draft[name] }}</textarea></label>
+        {% endfor %}
+        <div class="buttons">
+          <button class="primary">Save changes</button>
+          <button type="button" data-cancel="{{ case.id }}">Cancel</button>
+          <span class="note">Saving files nothing. You still approve the ticket afterwards.</span>
+        </div>
+      </form>
+      <dl class="ticket" data-view="{{ case.id }}">
+        {% for name, label in ticket_fields %}
+        <dt>{{ label }}{% if name in case.draft.original %}<span class="changed">edited</span>{% endif %}</dt><dd><pre>{{ case.draft[name] }}</pre></dd>
+        {% endfor %}
         {% if case.draft.possible_duplicates %}<dt>Possible duplicate of</dt><dd>{{ case.draft.possible_duplicates | join(', ') }}</dd>{% endif %}
       </dl>
       {% if case.draft.patch %}<div class="section-title">{{ 'Proposed fix, checked in a copy' if cat == 'product_bug' else 'Proposed test patch' }} ({{ case.draft.patch_status }})</div><pre class="patch">{{ case.draft.patch }}</pre>{% elif case.draft.patch_status %}<p><strong>Test patch:</strong> {{ case.draft.patch_status }}</p>{% endif %}
@@ -200,7 +234,7 @@
       {% endfor %}
       {% endif %}
     </div>
-    <div class="actions">
+    <div class="actions" data-view="{{ case.id }}">
       {% if case.draft %}
       <form method="post" action="/cases/{{ case.id }}/decide">
         <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -248,5 +282,22 @@
   </table></div>
   {% endif %}
 </main>
+<script>
+  // Edit swaps a card's fields for the form, and hides Approve so unsaved text cannot be missed.
+  function editing(id, on) {
+    document.getElementById("edit-" + id).hidden = !on;
+    document.querySelectorAll('[data-view="' + id + '"]').forEach(function (n) { n.hidden = on; });
+  }
+  document.addEventListener("click", function (e) {
+    var open = e.target.closest("[data-edit]"), cancel = e.target.closest("[data-cancel]");
+    if (open) { editing(open.dataset.edit, true); document.querySelector("#edit-" + open.dataset.edit + " textarea").focus(); }
+    if (cancel) { var id = cancel.dataset.cancel; document.getElementById("edit-" + id).reset(); editing(id, false); }
+  });
+  // The dashboard's "Edit the draft first" lands here with #edit-<case id>.
+  if (location.hash.indexOf("#edit-") === 0 && document.querySelector(location.hash)) {
+    var id = location.hash.slice(6); editing(id, true);
+    document.getElementById("case-" + id).scrollIntoView();
+  }
+</script>
 </body>
 </html>

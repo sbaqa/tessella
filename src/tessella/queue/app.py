@@ -164,6 +164,42 @@ def create_app(settings: Settings):
         store.record(case, decision)
         return RedirectResponse("/", status_code=303)
 
+    def _editable(case_id: str, form) -> object | None:
+        """The case a reviewer may still change, after checking the form token."""
+        from fastapi import HTTPException
+
+        if not secrets.compare_digest(str(form.get("csrf", "")), app.state.csrf):
+            raise HTTPException(status_code=403,
+                                detail="Stale or missing form token; reload the queue.")
+        case = store.get_case(case_id)
+        return case if case and case.draft and not store.decided(case_id) else None
+
+    @app.post("/cases/{case_id}/edit")
+    async def edit(request: Request, case_id: str):
+        """Save a reviewer's changes to a draft. Filing still needs Approve."""
+        from tessella.draft import ticket
+
+        form = await request.form()
+        case = _editable(case_id, form)
+        if case is None:
+            return RedirectResponse("/", status_code=303)
+        by = getattr(request.state, "reviewer", None) or str(form.get("by", "sdet"))
+        ticket.edit(case, {n: str(form[n]) for n in ticket.EDITABLE if n in form}, by)
+        store.save_case(case)
+        return RedirectResponse(f"/#case-{case_id}", status_code=303)
+
+    @app.post("/cases/{case_id}/undo-edits")
+    async def undo_edits(request: Request, case_id: str):
+        """Put back the text Tessella wrote."""
+        from tessella.draft import ticket
+
+        case = _editable(case_id, await request.form())
+        if case is None:
+            return RedirectResponse("/", status_code=303)
+        ticket.undo_edits(case)
+        store.save_case(case)
+        return RedirectResponse(f"/#case-{case_id}", status_code=303)
+
     return app
 
 

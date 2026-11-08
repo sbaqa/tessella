@@ -1030,6 +1030,10 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
         row.appendChild(b);
       });
       body.appendChild(row);
+      if (c.draft) {
+        var fix = el("a", "Edit the draft first"); fix.href = "/#edit-" + lead;
+        body.appendChild(fix);
+      }
     } else if (c.state === "open" && !live) {
       section("Decide");
       body.appendChild(el("p", "Decide it in the review queue (tessella queue), or open this report from there."));

@@ -611,7 +611,7 @@ reproduce, actual result, expected result). For each draft an SDET can:
 | Action | Effect | What Tessella learns |
 | --- | --- | --- |
 | Approve | Ticket filed to the configured board (`board: jira` or `board: github`) | This signature is a real bug |
-| Edit and approve | SDET fixes the draft, then files | (planned) the edit is kept as an example; the queue has no edit form yet |
+| Edit, then approve | Fix any field in the queue (Edit draft), save, then approve to file your text | Tessella's own text is kept, so Undo my edits restores it, and a later triage keeps your words |
 | Reject with a reason | Not a bug, test bug, environment, test data, flaky or duplicate | The next run labels the same signature instead of drafting it again |
 | Delete | Removed as noise | Nothing: deletes are not training signal |
 
@@ -1007,7 +1007,7 @@ and `models.vision` yourself.
 | `tessella init` | Interactive setup: write `tessella.yaml`, install the extras it needs, start a project-scoped Ollama server and pull models, if you chose local models. Option: `--config` |
 | `tessella triage [REPORTS...]` | Collect, cluster, investigate and judge failures; fill the review queue. Options: `--config`, `--no-rerun` (artifacts only, fast), `--no-model` (collect and cluster only), `--json` (each cluster with its earlier decision: `decision`, `decided_at`, `decided_by`, `ticket_key`, `ticket_url`) |
 | `tessella probe [TRACES...]` | Link IDs in recorded flows and plan mutations; the plan is stored and shown in the report. Option: `--flow NAME`. It sends nothing; for findings, pass Schemathesis or ZAP reports to `tessella triage` |
-| `tessella ci [REPORTS...]` | Triage inside a pipeline, print one summary, always exit 0 so Tessella never fails your build. Options: `--comment` (post the summary on the PR/MR, see [Running in CI](#running-in-ci)), `--queue-url` |
+| `tessella ci [REPORTS...]` | Triage inside a pipeline, print one summary, always exit 0 so Tessella never fails your build. Options: `--comment` (post the summary on the PR/MR, see [Running in CI](#running-in-ci)), `--queue-url`, `--no-rerun`, `--no-model`, `--minutes` |
 | `tessella queue` | Open the review queue on `http://localhost:8484`; the live dashboard is at `/report`. Options: `--port`, `--host` (beyond loopback needs `team.reviewers`), `--tls-cert`/`--tls-key` for HTTPS |
 | `tessella report` | Write an offline HTML dashboard to `.tessella/report.html`: failures as tiles, the funnel to tickets, reviewer agreement, evidence quality, model calls and run history. Options: `--out PATH`, `--open`, `--view full\|management`, `--config` |
 | `tessella calibrate [SIGNATURE]` | Time a manual investigation on a raw failure (no verdict shown) so the time-saved figure rests on your team's own numbers. Options: `--minutes N` to import a time you already know, `--no-ticket` if it did not end in a ticket, `--note`, `--list`, `--config` |
@@ -1153,15 +1153,45 @@ A class goes to a cloud model only if it is in `may_leave` and not in `never_lea
 <details>
 <summary>💬 <b>Running in CI</b></summary>
 
-`tessella ci` is designed to run after your tests, only when they fail, and never to break the
-build itself. Example for GitHub Actions:
+`tessella ci` runs after your tests, only when they fail, and never breaks the build itself.
+On GitHub Actions the Tessella action does everything, including running a real model on the
+runner, so your logs and code stay inside the job:
+
+```yaml
+permissions: { contents: read, pull-requests: write }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      # ... install your project and run your tests ...
+      - uses: sbaqa/tessella@master
+        if: failure()
+```
+
+It installs Tessella away from your project's packages, installs Ollama, downloads the model
+your config names (cached after the first run, about 3.4 GB for the default), restores what
+Tessella remembers, re-runs each failing test, judges the failures, comments on the pull
+request and uploads the report. Your `tessella.yaml` needs `api.github.com` in `network.allow`
+for the comment. Inputs: `reports`, `config`, `working-directory`, `use-model`, `rerun`,
+`comment`, `minutes`, `ollama-version`.
+
+A standard runner has no GPU, so the model runs on 4 CPU cores. `minutes` (default 25) stops
+asking the model after that long and reports what is left as not judged. With `use-model:
+false`, or if the model cannot be installed, you still get the failures grouped, the kind of
+each one, which ones the board already has (by the ticket's `tessella-<signature>` label, when
+Jira is configured) and how often each failed before.
+
+Anywhere else, run the command yourself. Install Ollama and `tessella models pull` first to
+judge with a model, or add `--no-model`:
 
 ```yaml
 - name: Investigate failures with Tessella
   if: failure()
   run: |
-    pip install "tessella[llm,vision] @ git+https://github.com/sbaqa/tessella"  # a private repo needs a token
-    tessella ci playwright-report/ test-results/*.xml
+    pip install "tessella[llm,vision] @ git+https://github.com/sbaqa/tessella"
+    tessella ci --minutes 25 playwright-report/ test-results/*.xml
 ```
 
 **A comment on the pull request.** With `--comment` (or `ci.comment: true`), the summary, one

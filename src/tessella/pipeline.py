@@ -7,13 +7,14 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from tessella.cluster import cluster
 from tessella.cluster.recall import recall
 from tessella.collect import collect_cases, collect_flows
 from tessella.collect.findings import at_least
 from tessella.config import Settings
-from tessella.draft.ticket import ticket
+from tessella.draft.ticket import duplicates_block, keep_edits, patch_block, ticket
 from tessella.integrations import llm
 from tessella.memory.store import Store
 from tessella.models import Action, Case, Category, Decision, Flow, Origin, Verdict
@@ -32,6 +33,11 @@ class RunResult:
     jira_matches: dict[str, list[dict]] = field(default_factory=dict)
     # signature -> an approval that filed nothing (no board then), now judged again
     reopened: dict[str, Decision] = field(default_factory=dict)
+    # signature -> (earlier runs this failure appeared in, earlier runs looked at)
+    history: dict[str, tuple[int, int]] = field(default_factory=dict)
+    used_model: bool = True
+    board_checked: bool = False  # the board itself was asked which failures it already has
+    out_of_time: int = 0  # clusters the model did not reach within the time limit
 
 
 def _ticket_gone(settings: Settings, past) -> bool:
@@ -49,6 +55,42 @@ def _ticket_gone(settings: Settings, past) -> bool:
         return not jira.issue_exists(j, past.ticket_key, settings.network.allow)
     except Exception:
         return False
+
+
+def _filed_on_board(settings: Settings, signature: str) -> Decision | None:
+    """The Jira ticket already labelled with this failure, for a machine with no memory of
+    filing it (a CI runner). Only `tessella ci` asks: on a laptop the store knows, and
+    `tessella forget` must be able to bring a failure back. Fails open."""
+    j = settings.jira
+    if not _can_ask_board(settings):
+        return None
+    from tessella.integrations import jira
+
+    try:
+        found = jira.find_by_signature(j, signature, settings.network.allow)
+    except Exception:  # noqa: BLE001 - never re-file or stop a run on doubt
+        return None
+    if not found:
+        return None
+    return Decision(action=Action.approve, by="", at=datetime.now(), board="jira",
+                    ticket_key=found[0], ticket_url=found[1], linked_existing=True)
+
+
+def _can_ask_board(settings: Settings) -> bool:
+    from tessella import egress
+
+    j = settings.jira
+    return settings.board == "jira" and bool(j.url and j.project and j.token) and not egress.active()
+
+
+def _history(store: Store, signatures, last: int = 20) -> dict[str, tuple[int, int]]:
+    """How often each failure showed up in the runs before this one. Nice to have: a store
+    that cannot answer costs only this column."""
+    try:
+        runs = [r["detail"] if isinstance(r["detail"], dict) else {} for r in store.runs()[-last:]]
+    except Exception:  # noqa: BLE001
+        return {}
+    return {s: (sum(s in detail for detail in runs), len(runs)) for s in signatures}
 
 
 def _filed_nothing(settings: Settings, past) -> bool:
@@ -255,9 +297,7 @@ def _note_duplicates(draft, issues: list[dict]) -> None:
         return
     draft.jira_matches = issues
     draft.possible_duplicates += [i["key"] for i in issues if i["key"] not in draft.possible_duplicates]
-    lines = "\n".join(f"- {i['key']} ({i['status'] or 'unknown status'}): {i['summary']}"
-                      for i in issues)
-    draft.body += f"\n\n**Possible duplicates already in Jira:**\n{lines}"
+    draft.body += duplicates_block(draft)
 
 
 def _preflight(settings: Settings) -> list:
@@ -288,7 +328,10 @@ def _warm_models(settings: Settings) -> None:
             local_llm.warm(ms, settings.network.allow)
 
 
-def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> RunResult:
+def triage(settings: Settings, rerun: bool = True, use_model: bool = True,
+           ask_board: bool = False, minutes: float | None = None) -> RunResult:
+    """`ask_board` also checks the board for each failure (see _filed_on_board); `minutes`
+    stops asking the model after that long, leaving the remaining failures not judged."""
     started, model_before = time.monotonic(), llm.model_seconds()
     store = Store(settings.storage.path)
     cases = [c for c in collect_cases(settings.inputs.reports, settings.redact)
@@ -296,7 +339,9 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
              or at_least(c.severity, settings.probe.min_severity)]
     flows = collect_flows(settings.inputs.traces, settings.redact)
     clusters = cluster(cases)
-    result = RunResult(cases=cases, clusters=clusters, flows=flows)
+    result = RunResult(cases=cases, clusters=clusters, flows=flows, used_model=use_model,
+                       history=_history(store, clusters),
+                       board_checked=ask_board and _can_ask_board(settings))
     todo: list[list[Case]] = []
     verdicts: dict[str, Verdict | None] = {}
 
@@ -310,13 +355,16 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
             store.forget(lead.signature)  # approved with no board: judge it afresh, file on approval
             result.reopened[signature] = past
             past = None
+        if past is None and ask_board:
+            past = _filed_on_board(settings, lead.signature)
         if past is not None:
             result.recalled += 1
             result.decisions[signature] = past
             # keeps its original verdict/draft; recall never re-saves. By signature as a
             # fallback: a test that moved or was renamed has a new id but the same failure.
             prior = store.get_case(lead.id) or store.case_with_signature(lead.signature)
-            note = (f"Already {past.action}"
+            note = (f"Already filed as {past.ticket_key}." if not past.by else
+                    f"Already {past.action}"
                     + (f" as {past.reason}" if past.reason else "")
                     + (f" → {past.ticket_key}" if past.ticket_key else "")
                     + f" on {past.at:%Y-%m-%d}.")
@@ -349,11 +397,19 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
     if use_model and gathered:
         _warm_models(settings)
     workers = max(1, settings.models.reader.parallel)
+    deadline = None if minutes is None else started + minutes * 60
+
+    def in_time() -> bool:
+        return deadline is None or time.monotonic() < deadline
 
     def judge(members: list[Case]) -> tuple[str, Verdict | None]:
         try:
             examples = memory.examples.get(members[0].signature, "") if memory else ""
-            return members[0].signature, _judge(members[0], settings, use_model, examples, rerun)
+            ask = use_model and in_time()
+            verdict = _judge(members[0], settings, ask, examples, rerun)
+            if use_model and not ask and verdict is None:
+                result.out_of_time += 1
+            return members[0].signature, verdict
         except Exception as exc:  # noqa: BLE001
             return members[0].signature, _failed(exc)
 
@@ -370,12 +426,12 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
         verdict = verdicts.get(signature)
         duplicates = memory.duplicates.get(signature) if memory else None
         patch, in_jira = None, []
-        if (use_model and settings.models.fixer is not None and verdict
+        if (use_model and in_time() and settings.models.fixer is not None and verdict
                 and verdict.category == Category.test_bug):
             from tessella.draft.patch import fix
 
             patch = fix(members[0], settings, rerun)  # re-runs: one cluster at a time
-        elif (use_model and rerun and settings.models.fixer is not None and verdict
+        elif (use_model and in_time() and rerun and settings.models.fixer is not None and verdict
               and verdict.category == Category.product_bug and settings.fix.product):
             from tessella.draft import fixer_agent
 
@@ -394,11 +450,11 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
                 _note_duplicates(c.draft, in_jira)
                 if patch:
                     c.draft.patch, c.draft.patch_status = patch
-                    if c.draft.patch:
-                        what = ("Proposed fix" if verdict.category == Category.product_bug
-                                else "Proposed test patch")
-                        c.draft.body += (f"\n\n**{what}** ({c.draft.patch_status}):"
-                                         f"\n```diff\n{c.draft.patch}```")
+                    c.draft.body += patch_block(c.draft, verdict.category)
+                earlier = store.get_case(c.id)
+                if (earlier and earlier.signature == c.signature and earlier.draft
+                        and earlier.draft.original):
+                    keep_edits(c, earlier.draft)  # a re-run never overwrites a reviewer's words
             store.save_case(c)
         if memory:
             try:

@@ -18,17 +18,15 @@ jobs:
       - run: pip install -e ".[all,dev]"
       - run: pytest -q
 
-  # Tessella on its own demo shop: the suite fails on purpose (planted bugs), and the summary
-  # is posted on the pull request. No model on this runner, so failures are grouped, not judged.
+  # Tessella on its own demo shop: the suite fails on purpose (planted bugs), a real local model
+  # on this runner judges the failures, and the summary is posted on the pull request.
   demo-triage:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 50
     permissions:
       contents: read
       pull-requests: write
-    defaults:
-      run:
-        working-directory: examples/demo_shop
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,21 +34,19 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22" }
       - run: npm install -g allure-commandline
-      - run: |
-          pip install -e "../..[all,dev]" -r requirements.txt
+      - working-directory: examples/demo_shop
+        run: |
+          pip install -r requirements.txt
           playwright install --with-deps chromium
           cp tessella.example.yaml tessella.yaml
           sed -i 's/allow: \["127/allow: ["api.github.com", "127/' tessella.yaml
-      - run: bash run_suite.sh -q
-      - run: tessella ci --comment --no-model --no-rerun
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: tessella report -o tessella-report.html
-        if: always()
+      - working-directory: examples/demo_shop
+        run: bash run_suite.sh -q
+      - uses: ./
+        with:
+          working-directory: examples/demo_shop
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: tessella-report
-          path: |
-            examples/demo_shop/tessella-report.html
-            examples/demo_shop/reports/allure-report
+          name: allure-report
+          path: examples/demo_shop/reports/allure-report

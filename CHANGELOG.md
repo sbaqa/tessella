@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Edit a ticket draft in the review queue before filing: every field and the title, marked as edited, with undo. A later triage keeps a reviewer's words.
+- A GitHub Action (`uses: sbaqa/tessella@master`) that runs a real local model on the runner, triages the failures, comments on the pull request and uploads the report.
+- `tessella ci --minutes`: a time limit for the model, so a slow runner reports what it did not reach.
+
+### Changed
+- The CI comment is useful with no model: failures are grouped with their kind, how often each failed before, which ones the board already has, and a link to the run.
+
 ## 0.1.0 (2026-11-08)
 
 ### Added

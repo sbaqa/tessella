@@ -116,6 +116,10 @@ class Draft(BaseModel):
     # showed ("verified: passed 2 of 2 re-runs", "not verified: ...").
     patch: str = ""
     patch_status: str = ""
+    # Set when a reviewer changed the draft before filing: who, and Tessella's own text for
+    # each field they changed (draft/ticket.py EDITABLE), so the change can be undone.
+    edited_by: str = ""
+    original: dict[str, str] = Field(default_factory=dict)
 
 
 class Action(StrEnum):
