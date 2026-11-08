@@ -5,4 +5,4 @@ becomes a Case that goes through one loop:
 collect -> cluster/recall -> investigate -> probe -> verdict -> draft -> review.
 """
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"

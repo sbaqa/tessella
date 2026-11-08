@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 
 from tessella import board
 from tessella.models import Action, Case, Category, Decision, Draft, DraftKind, Origin, Verdict
@@ -98,3 +99,32 @@ def test_a_recalled_failure_from_a_moved_test_keeps_its_verdict(tmp_path):
     assert store.get_case("newid") is None
     found = store.case_with_signature("sig")
     assert found.id == "oldid" and found.verdict.category == Category.product_bug
+
+
+def test_a_measured_time_does_not_change_the_failures_identity():
+    from tessella.cluster.signature import normalize
+
+    a = normalize("AssertionError: recommendations took 1.15s, budget is 0.80s")
+    assert a == normalize("AssertionError: recommendations took 0.91s, budget is 0.80s")
+    assert normalize("took 812ms") == normalize("took 95ms")
+    # A configured timeout is part of the failure, and filed tickets are labelled by it.
+    assert "3000ms" in normalize("Page.click: Timeout 3000ms exceeded.")
+
+
+def test_screenshots_survive_the_report_being_rebuilt(tmp_path):
+    from tessella.config import Settings
+    from tessella.models import Evidence, EvidenceKind
+    from tessella.pipeline import _keep_screenshots
+
+    shot = tmp_path / "report" / "a.png"
+    shot.parent.mkdir()
+    shot.write_bytes(b"png")
+    s = Settings(storage={"path": str(tmp_path / "db" / "t.sqlite")})
+    case = _case("c1", draft=False)
+    case.screenshots = [str(shot), "gone.png"]
+    case.evidence = [Evidence(kind=EvidenceKind.visual_diff, summary="d", image=str(shot))]
+    _keep_screenshots(case, s)
+    shot.unlink()
+    assert Path(case.screenshots[0]).read_bytes() == b"png"
+    assert case.screenshots[1] == "gone.png"  # already missing: left as it was
+    assert Path(case.evidence[0].image).is_file()

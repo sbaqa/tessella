@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tessella"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Local quality investigator: explains why your tests failed and finds the bugs they missed, without data leaving your network."
 readme = "README.md"
 requires-python = ">=3.12"

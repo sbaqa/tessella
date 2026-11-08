@@ -64,6 +64,30 @@ def _filed_nothing(settings: Settings, past) -> bool:
     return False
 
 
+def _keep_screenshots(case: Case, settings: Settings) -> None:
+    """Copy a case's images next to the store and point the case at the copies. Reports are
+    rebuilt on every run (Allure's --clean deletes the old attachments), so a path into a
+    report goes stale, and with it the screenshots of a ticket not yet filed."""
+    import shutil
+    from pathlib import Path
+
+    folder = Path(settings.storage.path).parent / "screenshots" / case.id
+
+    def kept(path: str | None) -> str | None:
+        source = Path(path) if path else None
+        if source is None or not source.is_file() or folder in source.parents:
+            return path
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            return str(shutil.copy2(source, folder / source.name))
+        except OSError:  # a copy we cannot make costs only the copy
+            return path
+
+    case.screenshots = [kept(p) for p in case.screenshots]
+    for ev in case.evidence:
+        ev.image = kept(ev.image)
+
+
 def _visual_diff(case: Case) -> None:
     """A pixel diff against the last green screenshot. No model needed."""
     if not case.screenshots:
@@ -357,6 +381,7 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
 
             patch = fixer_agent.run(members[0], settings)  # sequential: it re-runs tests
         for c in members:
+            _keep_screenshots(c, settings)
             c.verdict = verdict
             # Both product bugs and test bugs are actionable tickets someone must fix;
             # flaky/environment/test_data/unknown are not filed (see CLAUDE.md).

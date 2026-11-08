@@ -253,14 +253,16 @@ def probe(
 @app.command()
 def ci(reports: list[str] = typer.Argument(None), cfg: Optional[Path] = typer.Option(None, "--config", "-c"),
        comment: Optional[bool] = typer.Option(None, "--comment/--no-comment", help="Post the summary on the pull/merge request (default: ci.comment)."),
-       queue_url: Optional[str] = typer.Option(None, "--queue-url", help="Review queue link for the comment (default: ci.queue_url).")):
+       queue_url: Optional[str] = typer.Option(None, "--queue-url", help="Review queue link for the comment (default: ci.queue_url)."),
+       no_rerun: bool = typer.Option(False, "--no-rerun", help="Use artifacts only (fast)."),
+       no_model: bool = typer.Option(False, "--no-model", help="Collect and cluster only, for a runner with no model.")):
     """Run triage (and later probe) in CI, print one summary and optionally comment it on the PR. Always exits 0."""
     from tessella.integrations import ci_comment
     from tessella.pipeline import triage as run
 
     try:
-        s = _settings(cfg, reports, models=True)
-        result = run(s)
+        s = _settings(cfg, reports, models=not no_model)
+        result = run(s, rerun=not no_rerun, use_model=not no_model)
         body = ci_comment.summary(result.cases, queue_url or s.ci.queue_url, result)
         console.print(body)
         if comment if comment is not None else s.ci.comment:

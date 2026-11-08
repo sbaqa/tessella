@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/sbaqa/tessella/actions/workflows/ci.yml"><img alt="Tests" src="https://github.com/sbaqa/tessella/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Licence: Apache-2.0" src="https://img.shields.io/badge/licence-Apache--2.0-2546a8">
   <img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-17766f">
   <img alt="Runs locally" src="https://img.shields.io/badge/models-run%20locally-c48d12">
@@ -251,7 +252,7 @@ flowchart LR
 | 🎯 Triage on the demo shop, local qwen3.5:4b on CPU | **12 of 12** correct (4 failures, 3 runs each, same answer every time); 4 of 4 again after the suite was rewritten |
 | 🎫 Filing to a real Jira Cloud project | 3 tickets filed; approving the same failure again links back instead of filing twice |
 | 🛠 Fixer agent on a real planted bug | Checked fix in 4 to 6 steps across two runs: the failing test passed 3 of 3 re-runs and the API suite gained no new failures |
-| 🧪 Tessella's own tests | Run with `pytest`; model calls are faked |
+| 🧪 Tessella's own tests | About 300, run on every push; model calls are faked |
 
 These are small numbers on a demo target, a smoke test rather than an accuracy figure. The flaky verdict came from the re-run rule, not the model.
 

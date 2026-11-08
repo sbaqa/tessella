@@ -18,6 +18,10 @@ _RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\d{4}-\d{2}-\d{2}[T ][\d:.]+Z?"), "<ts>"),
     (re.compile(r"0x[0-9a-f]+", re.I), "<hex>"),
     (re.compile(r"'[^']*'|\"[^\"]*\""), "<str>"),
+    # A measured value with a unit (1.15s, 812ms): the plain number rule below stops at the
+    # unit, so every run of a timing failure would count as a new failure. A configured
+    # "Timeout 3000ms" is part of the failure, so it stays.
+    (re.compile(r"\b\d+\.\d+[a-zA-Z%]*\b|(?<!Timeout )\b\d+(?:ms|s)\b"), "<n>"),
     (re.compile(r"\b\d+(\.\d+)?\b"), "<n>"),
     (re.compile(r"\s+"), " "),
 ]

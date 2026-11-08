@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 (2026-11-08)
 
 ### Added
 - Fixer agent for product bugs: reads the code, tries an edit in a temporary copy, keeps it only
@@ -15,8 +15,10 @@
 ### Fixed
 - A decision now belongs to one failure, so a test that fails a new way is a new question.
 - An approval that filed nothing is judged again once a board is set up.
+- Screenshots are kept next to the store, so rebuilding a report cannot delete them.
+- A measured time in an error message no longer makes a flaky failure look new.
 
-## 0.1.0.dev0
+### Earlier work
 
 First working version: report readers, clustering, evidence gathering, verdicts on local models,
 ticket drafts, review queue, report, offline mode.

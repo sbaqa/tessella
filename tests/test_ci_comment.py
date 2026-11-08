@@ -77,7 +77,7 @@ def test_ci_command_comments_only_when_asked(monkeypatch, tmp_path):
     from tessella import pipeline
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(pipeline, "triage", lambda s: pipeline.RunResult(cases=_cases()))
+    monkeypatch.setattr(pipeline, "triage", lambda s, **kw: pipeline.RunResult(cases=_cases()))
     monkeypatch.setattr(cli, "_start_project_ollama", lambda s: None)
     posted = []
     monkeypatch.setattr(ci_comment, "post", lambda t, body, allow: posted.append(body) or "created")
