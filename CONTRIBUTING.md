@@ -21,7 +21,6 @@ Tests never call a model: replace `tessella.integrations.llm._call` with a fake.
 - Local models come first. Cloud models are optional and pass the data policy.
 - Never commit a `tessella.yaml`: it is your own config. Change `config.py` and
   `tessella.example.yaml` instead.
-- `CLAUDE.md` lists the project's design rules in full.
 
 Run `venv/bin/pytest` before opening a pull request. By contributing you agree your work is
 licensed under Apache-2.0.

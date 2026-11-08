@@ -18,3 +18,5 @@ tessella-bundle*.tar
 examples/demo_shop/reports/
 examples/demo_shop/test-results/
 examples/demo_shop/logs/
+# Local working notes
+CLAUDE.md
