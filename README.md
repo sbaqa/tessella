@@ -20,6 +20,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#the-big-picture">How it works</a> ·
   <a href="#results-so-far">Results</a> ·
+  <a href="#pricing">Pricing</a> ·
   <a href="#status-at-a-glance">Status</a> ·
   <a href="#full-documentation">Full docs</a>
 </p>
@@ -216,6 +217,20 @@ These are small numbers on a demo target, a smoke test rather than an accuracy f
 
 **What you need:** about 16 GB of RAM, no GPU, 3.4 GB of disk for the model, Python 3.12. Expect 1 to 5 minutes per failure on an 8-core CPU, depending on how long your tests take to re-run. Cloud models are optional.
 
+## Pricing
+
+**Tessella is free for now**: open source under [Apache-2.0](LICENSE), with no seats and no per-test fees. You only bring the machine it runs on. A cloud model is optional and billed by its vendor.
+
+| Tool | Starting price | Higher plans | Good to know |
+| --- | --- | --- | --- |
+| 🧩 **Tessella** | **Free** | None today | Runs on your hardware; data stays with you |
+| [BrowserStack Automate](https://www.browserstack.com/pricing?product=test-reporting) | $99/month, billed annually (reporting included) | $225/month, billed annually, adds AI failure analysis | Runs tests on their cloud; reporting for tests run elsewhere is quote only |
+| [ReportPortal](https://reportportal.io/pricing/saas) | Free to self-host | Cloud from $569/package/month; $2,659 Business; Enterprise by quote | Reporting and history, no LLM investigation |
+| [TestDino](https://www.testdino.com/pricing) | Free: 5,000 executions/month, 1 seat | $39/month Pro, $79/month Team (discounted prices shown); Enterprise custom | Playwright-first SaaS |
+| [Playwright Healer](https://playwright.dev/docs/test-agents) | Free | None | You pay for the AI tool you run it with; repairs tests only |
+
+Public list prices checked on 8 November 2026. They change often, and these tools do different jobs, so compare what you actually need.
+
 ## Status at a glance
 
 | | |
@@ -319,6 +334,7 @@ fixes; a person applies them.
 | Frameworks and reports | Any report | Best on own runs | Many agents | Playwright-first | Playwright UI | Mostly Playwright |
 | Bug tickets | Drafts that learn | One-click to Jira | Links Jira | None | None | Often auto-filed |
 | AI model choice | Local, hybrid or cloud, by policy | Vendor's | No LLM | Vendor's | Your editor's | Your API key |
+| Price | Free for now ([details](#pricing)) | Paid plans | Free to self-host; paid cloud | Free tier; paid plans | Free, plus your AI tool | Mostly free |
 
 Competitor descriptions are a summary of their public documentation and have not been re-checked
 recently. See each vendor's current documentation.
@@ -1439,6 +1455,8 @@ checks the model host against the allowlist before every call). Local roles do g
 
 <details>
 <summary><b>❓ Common questions</b></summary>
+
+**Is it free?** Yes, for now: it is open source under Apache-2.0. See [Pricing](#pricing).
 
 **Do I need a GPU or a cloud account?** No. Collecting, clustering, re-runs and visual diffs need
 no model. For verdicts, a local model on a laptop is the default; cloud models are optional.
