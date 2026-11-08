@@ -94,6 +94,9 @@ Real screens from the included demo shop, on a small local model.
 <td><img src="docs/media/terminal.png" alt="tessella triage output in a terminal"><br><b>Terminal.</b> One sentence on what the run means.</td>
 <td><img src="docs/media/shop.png" alt="Mosaic Market, the demo shop"><br><b>Demo shop.</b> Five planted bugs to practise on.</td>
 </tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/media/kan-8.png" alt="A bug ticket Tessella filed in Jira after approval" width="560"><br><b>The filed ticket.</b> A real Jira ticket from the demo shop, every field written from evidence.</td>
+</tr>
 </table>
 
 ## Quick start

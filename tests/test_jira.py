@@ -254,3 +254,24 @@ def test_board_check_verifies_link_back_and_duplicate_search_per_filed_ticket(mo
     checks = {c.name: c for c in board_check.filed(settings)}
     assert checks["KAN-9 link-back"].ok
     assert checks["KAN-9 duplicate search"].ok  # found through the tessella label
+
+
+def test_a_filed_body_is_jira_wiki_markup_not_markdown():
+    body = ("**Description:** it broke at `cancel`\n\n**Steps to reproduce:**\n1. Pay\n2. Cancel\n\n"
+            "- a note\n```diff\n**not bold** in code\n1. not a list\n```\n_Drafted by Tessella._")
+    assert jira.wiki(body).splitlines() == [
+        "*Description:* it broke at {{cancel}}", "", "*Steps to reproduce:*", "# Pay", "# Cancel", "",
+        "* a note", "{code}", "**not bold** in code", "1. not a list", "{code}", "_Drafted by Tessella._"]
+
+
+@respx.mock
+def test_create_issue_sends_wiki_markup(monkeypatch):
+    import json
+
+    monkeypatch.setenv("JIRA_TOKEN", "faketoken")
+    respx.get("https://x.atlassian.net/rest/api/3/search/jql").mock(return_value=httpx.Response(200, json={"issues": []}))
+    post = respx.post("https://x.atlassian.net/rest/api/2/issue").mock(
+        return_value=httpx.Response(201, json={"key": "KAN-1"}))
+    draft = Draft(kind=DraftKind.ticket, title="t", body="**Root cause:** x", signature="s")
+    jira.create_issue(CFG, draft, ALLOW)
+    assert json.loads(post.calls.last.request.content)["fields"]["description"] == "*Root cause:* x"

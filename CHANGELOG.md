@@ -15,6 +15,7 @@
 ### Fixed
 - A decision now belongs to one failure, so a test that fails a new way is a new question.
 - An approval that filed nothing is judged again once a board is set up.
+- Jira tickets are written in wiki markup, so they no longer show literal asterisks and code fences.
 - Screenshots are kept next to the store, so rebuilding a report cannot delete them.
 - A measured time in an error message no longer makes a flaky failure look new.
 

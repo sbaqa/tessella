@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import mimetypes
+import re
 from pathlib import Path
 
 from tessella import net
@@ -20,6 +21,24 @@ def _error_detail(r) -> str:
         return "; ".join(parts) or r.text[:500]
     except ValueError:
         return r.text[:500]
+
+
+def wiki(markdown: str) -> str:
+    """Draft bodies are Markdown; Jira's v2 API reads wiki markup and would show the asterisks
+    and code fences literally. Code blocks pass through untouched."""
+    out, code = [], False
+    for line in markdown.splitlines():
+        if line.lstrip().startswith("```"):
+            out.append("{code}")
+            code = not code
+        elif code:
+            out.append(line)
+        else:
+            line = re.sub(r"\*\*(.+?)\*\*", r"*\1*", line)
+            line = re.sub(r"`([^`]+)`", r"{{\1}}", line)
+            line = re.sub(r"^\d+\.\s+", "# ", line)
+            out.append(re.sub(r"^-\s+", "* ", line))
+    return "\n".join(out)
 
 
 def _auth_header(cfg: Jira) -> str:
@@ -66,7 +85,7 @@ def create_or_link(cfg: Jira, draft: Draft, allow: list[str]) -> tuple[str, str,
         return existing[0], existing[1], True
     labels = ["tessella"] + ([_label(draft.signature)] if draft.signature else [])
     payload = {"fields": {"project": {"key": cfg.project}, "summary": draft.title,
-                          "description": draft.body, "issuetype": {"name": cfg.issue_type},
+                          "description": wiki(draft.body), "issuetype": {"name": cfg.issue_type},
                           "labels": labels}}
     base = cfg.url.rstrip("/")
     headers = {"Authorization": _auth_header(cfg), "Content-Type": "application/json",
