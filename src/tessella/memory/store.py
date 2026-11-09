@@ -524,7 +524,8 @@ class Store:
         """Add what `other_path` knows and this store does not. Returns rows added per table.
 
         Nothing here is overwritten except: a case with no verdict here takes the other copy's
-        verdict, an undecided case nobody edited here takes a newer run's copy, an earlier
+        verdict, a newer run's copy replaces a case that fails a new way or that nobody decided or
+        edited here, an earlier
         first-shown time wins, and the newer ticket check wins. Decisions
         are matched on case, action and time, so merging the same file twice adds nothing.
         The other file is read through a temporary copy and is never modified."""
@@ -547,6 +548,7 @@ class Store:
                     mine, theirs = self.db, other.db
                     have_cases = dict(mine.execute("SELECT id, payload FROM cases"))
                     created_here = dict(mine.execute("SELECT id, created_at FROM cases"))
+                    signature_here = dict(mine.execute("SELECT id, signature FROM cases"))
                     decided_here = {r[0] for r in mine.execute(
                         "SELECT case_id FROM decisions WHERE action != 'delete'")}
                     for cid, sig, origin, title, payload, created in theirs.execute(
@@ -559,9 +561,10 @@ class Store:
                         elif '"verdict":null' in have_cases[cid].replace(" ", "") \
                                 and '"verdict":null' not in payload.replace(" ", ""):
                             mine.execute("UPDATE cases SET payload = ? WHERE id = ?", (payload, cid))
-                        elif (created > created_here[cid] and cid not in decided_here
+                        elif (created > created_here[cid]
                                 and '"verdict":null' not in payload.replace(" ", "")
-                                and not _edited(have_cases[cid])):
+                                and (sig != signature_here[cid]  # the same test, failing a new way
+                                     or (cid not in decided_here and not _edited(have_cases[cid])))):
                             mine.execute("UPDATE cases SET signature = ?, title = ?, payload = ?, created_at = ? "
                                          "WHERE id = ?", (sig, title, payload, created, cid))
                     seen = {(c, a, t) for c, a, t in mine.execute(

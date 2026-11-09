@@ -98,6 +98,16 @@ def create_app(settings: Settings):
             return jira.create_or_link(settings.jira, draft, settings.network.allow)
         return (*github.create_issue(settings.github, draft, settings.network.allow), False)
 
+    def _draft_flaky():
+        """Flaky failures stored before they got drafts, or merged from such a store."""
+        from tessella.draft.ticket import ticket
+        from tessella.models import Category
+
+        for case in store.open_cases():
+            if case.verdict and case.verdict.category == Category.flaky and not case.draft:
+                case.draft = ticket(case)
+                store.save_case(case)
+
     def _file_pending():
         """File what was approved while the board could not be reached. Stops at the first
         sign that it still cannot be; anything else stays pending and is tried on the next load."""
@@ -128,6 +138,7 @@ def create_app(settings: Settings):
         if view == "full":
             _reconcile_tickets()
             _file_pending()
+            _draft_flaky()
             store.mark_shown([c.id for c in store.open_cases()])  # starts the review clock for "time saved"
         data = report.build(settings, store)
         for cluster in data["clusters"]:

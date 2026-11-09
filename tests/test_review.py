@@ -489,3 +489,16 @@ def test_each_ci_gives_its_run_link():
                  "https://app.circleci.com/pipelines/github/o/r/3/workflows/a/jobs/4",
                  "https://gl.example/g/p/-/pipelines/5", "https://github.com/o/r/actions/runs/9"):
         assert ci_artifacts.host_of(link)
+
+
+def test_a_test_failing_a_new_way_on_ci_reaches_the_laptop_despite_an_old_decision(tmp_path):
+    mine = Store(tmp_path / "mine.sqlite")
+    old = _case("slow", "old-failure")
+    mine.save_case(old)
+    mine.record(old, Decision(action=Action.approve, by="anna", at=NOW))
+    mine.db.execute("UPDATE cases SET created_at = '2000-01-01'")
+    mine.db.commit()
+    db = _database(tmp_path, _case("slow", "new-failure"))
+    mine.merge_from(db)
+    assert mine.get_case("slow").signature == "new-failure" and [c.id for c in mine.open_cases()] == ["slow"]
+    assert mine.merge_from(db) == {k: 0 for k in mine.merge_from(db)}

@@ -92,13 +92,6 @@ def _models(records: list[dict], settings: Settings) -> dict:
     }
 
 
-def _tile_size(failures: int) -> int:
-    """Pixels per tile in the mosaic: big when there are few failures, small for many."""
-    for limit, size in ((6, 80), (12, 56), (60, 32), (300, 20)):
-        if failures <= limit:
-            return size
-    return 12
-
 
 def _outcome_summary(store: Store) -> dict:
     """What Jira said about each filed ticket the last time `tessella sync` ran."""
@@ -150,15 +143,22 @@ def _compare(runs: list[dict], titles: dict[str, str], states: dict[str, str]) -
     }
 
 
-def _probe_summary(store: Store) -> dict:
-    plans = store.probes()
-    kinds: Counter = Counter()
-    for pl in plans:
-        kinds.update(pl["kinds"])
-    return {"plans": len(plans), "flows": len({pl["flow"] for pl in plans}),
-            "steps": sum(pl["steps"] for pl in plans), "linked": sum(pl["linked"] for pl in plans),
-            "mutations": sum(pl["mutations"] for pl in plans), "kinds": dict(kinds.most_common()),
-            "last": plans[-1]["at"] if plans else None}
+
+def _trend(runs: list[dict], clusters: list[dict], decisions: dict, last: int = 12) -> list[dict]:
+    """The recent runs in plain counts: failed tests, bugs, flaky tests, and how many have a
+    ticket. By when each ran, since merged runs arrive out of order."""
+    kinds = {c["signature"]: c["category"] for c in clusters}
+    out = []
+    for r in sorted(runs, key=lambda x: x["at"])[-last:]:
+        detail = r["detail"]
+        at = datetime.fromisoformat(r["at"])
+        out.append({
+            "at": r["at"], "day": f"{at.day} {at:%b}", "failed": sum(detail.values()),
+            "bugs": sum(n for s, n in detail.items() if kinds.get(s) in ("product_bug", "test_bug")),
+            "flaky": sum(n for s, n in detail.items() if kinds.get(s) == "flaky"),
+            "tickets": sum(n for s, n in detail.items() if getattr(decisions.get(s), "ticket_key", None)),
+        })
+    return out
 
 
 def _details(clusters: list[dict], runs: list[dict], review_s: dict[str, float],
@@ -242,11 +242,11 @@ def _board(runs: list[dict], by_sig: dict[str, list[Case]], decisions: dict) -> 
                 links = [{"key": m["key"], "url": m.get("url")}
                          for m in (lead.draft.jira_matches if lead.draft else [])]
             status[r.signature] = {"status": r.status.value, "note": r.note, "links": links,
-                                   "latest": in_latest}
+                                   "latest": in_latest, "category": r.category}
     counts = Counter(status[sig]["status"] for sig in latest)
     return {"has": bool(latest), "at": runs[-1]["at"] if runs else None,
             "headline": board.headline(view(latest)) if latest else "",
-            "failures": sum(runs[-1]["detail"].get(sig, 1) for sig in latest) if latest else 0,
+            "failures": sum(runs[-1]["detail"].values()) if latest else 0,
             "counts": dict(counts), "latest": latest, "status": status}
 
 
@@ -380,9 +380,8 @@ def build(settings: Settings, store: Store, now: datetime | None = None,
         "time": time,
         "outcomes": {k: v for k, v in outcome.items() if k != "by_key"},
         "compare": _compare(runs, titles, states),
-        "probe": _probe_summary(store),
+        "trend": _trend(runs, clusters, decisions),
         "details": details,
-        "tile_size": _tile_size(n_fail),
         "clusters": clusters,
     }
 
@@ -395,8 +394,7 @@ STATES = {"open": "Waiting", "approved": "Approved", "rejected": "Rejected"}
 # Panels in their default order: (id, title). The page lets the reader hide and reorder them.
 PANELS = [
     ("cases", "Failures and what to do"),
-    ("mosaic", "Every failure, as a tile"),
-    ("compare", "Since the last run"),
+    ("compare", "Compared with the previous run"),
     ("saved", "Time saved"),
     ("funnel", "From failures to tickets"),
     ("trust", "Do reviewers agree?"),
@@ -404,14 +402,13 @@ PANELS = [
     ("runs", "Runs"),
     ("evidence", "How well verdicts are backed"),
     ("models", "Models and data"),
-    ("probe", "Probe"),
 ]
 # The full page in three tabs, so each question has one place: what this run means, what
 # Tessella is worth, and how it is set up. (id, label, panels)
 TABS = [
-    ("run", "This run", ("cases", "mosaic", "compare")),
+    ("run", "This run", ("cases", "compare")),
     ("value", "Value", ("saved", "funnel", "trust", "outcomes")),
-    ("setup", "Setup", ("runs", "evidence", "models", "probe")),
+    ("setup", "Setup", ("runs", "evidence", "models")),
 ]
 MAX_FUNNEL_TILES = 48
 
@@ -491,55 +488,6 @@ def _headline(t: dict, time: dict) -> str:
     return " ".join(parts)
 
 
-def _tile_counts(data: dict) -> tuple[Counter, Counter]:
-    """Failures per verdict and per review state, for the filter chips."""
-    by_cat: Counter = Counter()
-    by_state: Counter = Counter()
-    for c in data["clusters"]:
-        by_cat[c["category"]] += len(c["tests"])
-        by_state[c["state"]] += len(c["tests"])
-    return by_cat, by_state
-
-
-def _mosaic(data: dict) -> str:
-    size = data["tile_size"]
-    if not data["clusters"]:
-        return '<p class="empty">Every failure appears here as one tile, grouped by cluster.</p>'
-    by_cat, by_state = _tile_counts(data)
-    chips = "".join(
-        f'<button type="button" class="chip" data-filter="cat" data-value="{cat}" '
-        f'aria-pressed="false">{_swatch(cat)}{GLYPHS[cat]} {_e(LABELS[cat])} <b>{by_cat[cat]}</b></button>'
-        for cat in CATEGORIES if by_cat[cat])
-    chips += '<span class="chip-gap"></span>' + "".join(
-        f'<button type="button" class="chip" data-filter="state" data-value="{st}" '
-        f'aria-pressed="false"><span class="sw st-{st}" aria-hidden="true"></span>'
-        f'{_e(label)} <b>{by_state[st]}</b></button>'
-        for st, label in STATES.items() if by_state[st])
-
-    out = [f'<div class="chips" role="group" aria-label="Show only">{chips}</div>',
-           f'<div class="mosaic" id="mosaic" data-auto="{size}" style="--tile:{size}px"'
-           f'{" data-small" if size < 28 else ""}>']
-    for c in data["clusters"]:
-        n = len(c["tests"])
-        cols = max(1, math.ceil(math.sqrt(n)))
-        conf = f", {c['confidence']:.0%} sure" if c["confidence"] is not None else ""
-        status = {"approved": "approved" + (f" ({c['ticket_key']})" if c["ticket_key"] else ""),
-                  "rejected": "rejected" + (f" as {c['reason']}" if c["reason"] else ""),
-                  "open": "waiting for review"}[c["state"]]
-        out.append(f'<div class="cluster" style="--cols:{cols}"><div class="tiles">')
-        for t in c["tests"]:
-            tip = f"{t['title']}: {LABELS[c['category']].lower()}{conf}, {status}"
-            out.append(
-                f'<a class="tile cat-{_e(c["category"])} is-{c["state"]}" '
-                f'href="#case-{_e(t["id"])}" data-case="{_e(t["id"])}" data-tip="{_e(tip)}" '
-                f'aria-label="{_e(tip)}" '
-                f'data-cat="{_e(c["category"])}" data-state="{c["state"]}" '
-                f'data-cluster="{_e(c["signature"][:8])}" data-label="{_e(LABELS[c["category"]])}" '
-                f'data-glyph="{GLYPHS[c["category"]]}"></a>')
-        out.append(f'</div><p class="cap">{_e(LABELS[c["category"]])}<br>'
-                   f'<span>{_plural(n, "test")}</span></p></div>')
-    out.append("</div>")
-    return "".join(out)
 
 
 def _funnel(t: dict) -> tuple[str, str]:
@@ -755,49 +703,43 @@ def _outcomes(data: dict) -> tuple[str, str]:
             + "".join(f'<p class="note">{n}</p>' for n in notes)), ""
 
 
-def _compare_html(data: dict) -> tuple[str, str]:
-    cmp_ = data["compare"]
-    if not cmp_["has"]:
-        return ('<p class="empty">This needs two runs. Run <code>tessella triage</code> again and it '
-                "shows what is new, what came back and what was not seen.</p>"), ""
-    delta = cmp_["failures"] - cmp_["prev_failures"]
-    sign = "\u2212" if delta < 0 else "+"
-    sub = (f'<p class="sub">{_plural(cmp_["prev_failures"], "failure")} in the previous run, '
-           f'{cmp_["failures"]} in the latest ({sign}{abs(delta)}).</p>')
-    groups = (("new", "New"), ("returned", "Came back"), ("recurring", "Still failing"),
-              ("gone", "Not seen this run"))
-    rows = "".join(f'<li><span class="lbl">{label}</span><b>{len(cmp_[k])}</b></li>'
-                   for k, label in groups)
-    lists = ""
-    for k, label in groups[:2] + groups[3:]:
-        if cmp_[k]:
-            items = "".join(
-                f'<li><b>{_plural(r["failures"], "test")}</b> <span>{_e(r["title"])}</span></li>'
-                for r in cmp_[k][:4])
-            more = len(cmp_[k]) - 4
-            lists += (f"<h3>{label}</h3><ul class=\"back\">{items}</ul>"
-                      + (f'<p class="note">and {more} more</p>' if more > 0 else ""))
-    note = ('<p class="note">Not seen is not the same as fixed: a cluster also disappears when '
-            "its tests were not part of that run.</p>")
-    take = (f"{len(cmp_['new'])} new, {len(cmp_['returned'])} came back, "
-            f"{len(cmp_['gone'])} not seen since the last run.")
-    return f'{sub}<ul class="rows cmp">{rows}</ul>{lists}{note}', _e(take)
+def _trend_html(data: dict) -> tuple[str, str]:
+    """This run against the one before, as four numbers and bars for the recent runs."""
+    t = data["trend"]
+    if not t:
+        return '<p class="empty">This fills in after your first triage.</p>', ""
+    now, before = t[-1], t[-2] if len(t) > 1 else None
+    rows = ""
+    for key, label, more_is_bad in (("failed", "Failed tests", True), ("bugs", "Bugs", True),
+                                    ("flaky", "Flaky tests", True), ("tickets", "With a ticket", False)):
+        change = "first run"
+        cls = "same"
+        if before:
+            delta = now[key] - before[key]
+            change = "no change" if not delta else f'{"up" if delta > 0 else "down"} {abs(delta)}'
+            cls = "same" if not delta else "bad" if (delta > 0) == more_is_bad else "good"
+        rows += (f'<tr><th scope="row">{label}</th><td>{before[key] if before else "–"}</td>'
+                 f'<td class="now">{now[key]}</td><td class="chg {cls}">{change}</td></tr>')
+    table = ('<table class="trend"><thead><tr><th></th><th>Previous run</th><th>This run</th>'
+             f'<th>Change</th></tr></thead><tbody>{rows}</tbody></table>')
+    top = max(r["failed"] for r in t) or 1
+    bars = "".join(
+        f'<li title="{_e(_when(r["at"]))}: {r["failed"]} failed, {r["bugs"]} bugs, {r["flaky"]} flaky">'
+        f'<b>{r["failed"]}</b><span class="stack" style="height:{max(4, round(r["failed"] / top * 100))}%">'
+        f'<i class="bugs" style="flex:{r["bugs"]}"></i><i class="flaky" style="flex:{r["flaky"]}"></i>'
+        f'<i class="other" style="flex:{r["failed"] - r["bugs"] - r["flaky"]}"></i></span>'
+        f'<small>{_e(r["day"])}</small></li>' for r in t)
+    chart = (f'<ul class="bars" aria-label="Failed tests per run">{bars}</ul><p class="legend">'
+             '<i class="bugs"></i>Bugs <i class="flaky"></i>Flaky <i class="other"></i>Other</p>')
+    if not before:
+        take = f"First run: {_plural(now['failed'], 'test')} failed."
+    elif now["failed"] == before["failed"]:
+        take = f"The same number of failed tests as the previous run: {now['failed']}."
+    else:
+        delta = now["failed"] - before["failed"]
+        take = f"{_plural(abs(delta), 'failed test')} {'more' if delta > 0 else 'fewer'} than the previous run."
+    return table + chart, _e(take)
 
-
-def _probe_html(data: dict) -> tuple[str, str]:
-    pr = data["probe"]
-    if not pr["plans"]:
-        return ('<p class="empty">No probe has run. <code>tessella probe trace.zip</code> reads a '
-                "recorded flow and plans the changes it would try. To find bugs, run Schemathesis or "
-                "OWASP ZAP and pass their reports to <code>tessella triage</code>: their findings "
-                "appear with the other failures.</p>"), ""
-    kinds = "".join(f'<li><span class="lbl">{_e(k)}</span><b>{v}</b></li>' for k, v in pr["kinds"].items())
-    take = f"{_plural(pr['mutations'], 'change')} planned across {_plural(pr['flows'], 'flow')}."
-    return (f'<p class="sub">{_plural(pr["steps"], "step")} read, {_plural(pr["linked"], "linked ID")} '
-            f"found, last planned {_e(_when(pr['last']))}.</p>"
-            f'<ul class="rows cmp">{kinds}</ul>'
-            '<p class="note">Planned only: Tessella sends nothing to your system. Findings come from '
-            "Schemathesis and ZAP reports passed to <code>tessella triage</code>.</p>"), _e(take)
 
 
 def _trust(data: dict) -> str:
@@ -915,7 +857,7 @@ def _runs(data: dict) -> tuple[str, str]:
 
 
 BOARD_LABELS = {"on_board": "Already on the board", "likely_on_board": "Probably on the board",
-                "new": "New: draft ready", "your_call": "Your call", "decided": "Decided",
+                "new": "New: draft ready", "your_call": "Needs your decision", "decided": "Decided",
                 "pending": "Not analysed"}
 
 
@@ -947,7 +889,7 @@ def _cases(data: dict, live: bool = False) -> str:
             older_from = len(rows)
             rows.append('<tr class="sep"><td colspan="5">Not in the latest run</td></tr>')
         conf = f" {c['confidence']:.0%}" if c["confidence"] is not None else ""
-        badge = (f'<span class="st st-{_e(st["status"])}">{_e(BOARD_LABELS[st["status"]])}</span>')
+        badge = (f'<span class="st st-{_e(st["status"])}">{_e(_badge(st))}</span>')
         for i, t in enumerate(c["tests"]):
             first = i == 0
             rows.append(
@@ -955,9 +897,9 @@ def _cases(data: dict, live: bool = False) -> str:
                 f'{"" if st["latest"] or not b["latest"] else " class=old"}>'
                 f'<td class="test">{_e(t["title"])}</td>'
                 f'<td data-label="Verdict">{_swatch(c["category"])}{_e(LABELS[c["category"]])}{conf}</td>'
-                f'<td data-label="Board">{badge if first else "same failure"}</td>'
-                f'<td data-label="Ticket">{_ticket_links(st["links"]) if first else ""}</td>'
-                f'<td class="todo">{_e(st["note"]) if first else ""}</td></tr>')
+                f'<td data-label="Board">{badge}</td>'
+                f'<td data-label="Ticket">{_ticket_links(st["links"])}</td>'
+                f'<td class="todo">{_e(st["note"])}</td></tr>')
     more = ""
     if len(rows) > MAX_CASE_ROWS:
         more = (f'<p class="note">Showing {MAX_CASE_ROWS} of {len(rows)} rows, the latest run '
@@ -971,6 +913,15 @@ def _cases(data: dict, live: bool = False) -> str:
               '<button type="button" data-fview="board" aria-pressed="false">Board</button></div>')
     return (switch + f'<div data-fview-pane="table">{table}</div>'
             f'<div data-fview-pane="board" hidden>{_kanban(data, live)}</div>')
+
+
+def _badge(st: dict) -> str:
+    """The Board column in words: what kind of decision this is, not just that one is needed."""
+    kind = {"flaky": "Flaky: draft ready", "environment": "Environment problem",
+            "test_data": "Test data problem", "unknown": "Unclear: needs a person"}
+    if st["status"] in ("your_call", "new") and st.get("category") in kind:
+        return kind[st["category"]]
+    return BOARD_LABELS[st["status"]]
 
 
 # The triage board's columns, left to right: what needs a person first.
@@ -1112,19 +1063,14 @@ def render(data: dict, live: bool = False, view: str = "full", csrf: str | None 
     if view not in VIEWS:
         view = "full"
     t = data["totals"]
-    compare_body, compare_take = _compare_html(data)
+    compare_body, compare_take = _trend_html(data)
     outcomes_body, _ = _outcomes(data)
-    probe_body, probe_take = _probe_html(data)
     funnel_body, funnel_take = _funnel(t)
     runs_body, runs_take = _runs(data)
     all_panels = {
         "cases": lambda: _panel("cases", "Each failure against the tickets already filed, so "
                                 "nothing known is filed twice. Select a test for its evidence.",
                                 _cases(data, live)),
-        "mosaic": lambda: _panel(
-            "mosaic", "Every failure stored, from all runs: one tile per failing test, grouped by "
-            "cluster. Colour is the verdict. "
-            "Hover or tab to a tile to read it; select one to open its details.", _mosaic(data)),
         "funnel": lambda: _panel("funnel", "All runs: how much of the noise became something a person had "
                                  "to read.", funnel_body, _e(funnel_take)),
         "saved": lambda: _panel("saved", "What reviewing Tessella's work cost, against what doing "
@@ -1134,7 +1080,7 @@ def render(data: dict, live: bool = False, view: str = "full", csrf: str | None 
         "outcomes": lambda: _panel("outcomes", "Approving a draft says a person believed it. This "
                                    "is whether the ticket turned out to be worth filing.",
                                    outcomes_body),
-        "compare": lambda: _panel("compare", "The latest run against the one before it.",
+        "compare": lambda: _panel("compare", "Are things getting better or worse?",
                                   compare_body, compare_take),
         "runs": lambda: _panel("runs", "One row per triage. Clusters that return run after run "
                                "are the ones worth fixing at the source.", runs_body,
@@ -1143,8 +1089,6 @@ def render(data: dict, live: bool = False, view: str = "full", csrf: str | None 
                                    "before the model ran.", _evidence(data)),
         "models": lambda: _panel("models", "Every model call, from the audit log. Local means it "
                                  "stayed on your machine or network.", _models_html(data)),
-        "probe": lambda: _panel("probe", "Recorded flows read and the changes planned for them.",
-                                probe_body, probe_take),
     }
     shown = [(pid, title) for pid, title in PANELS
              if view == "full" or pid in SUMMARY_PANELS]

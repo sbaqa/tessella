@@ -516,9 +516,9 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True,
         for c in members:
             _keep_screenshots(c, settings)
             c.verdict = verdict
-            # Both product bugs and test bugs are actionable tickets someone must fix;
-            # flaky/environment/test_data/unknown are not filed (see CLAUDE.md).
-            if verdict and verdict.category in (Category.product_bug, Category.test_bug):
+            # Bugs and flaky tests always get a draft for a person to review; nothing is filed
+            # without approval. environment/test_data/unknown get none (see CLAUDE.md).
+            if verdict and verdict.category in (Category.product_bug, Category.test_bug, Category.flaky):
                 c.draft = ticket(c, duplicates)
                 if c is members[0]:
                     in_jira = _jira_duplicates(c, settings, use_model)  # one search per cluster

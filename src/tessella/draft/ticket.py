@@ -35,6 +35,7 @@ def ticket(case: Case, duplicates: list[str] | None = None) -> Draft:
     v = case.verdict
     cited = [case.evidence[i] for i in v.evidence_used]
 
+    flaky = v.category == Category.flaky
     description = f"{case.title} failed: {v.actual_result or case.message}"
     root_cause = v.root_cause
 
@@ -45,12 +46,19 @@ def ticket(case: Case, duplicates: list[str] | None = None) -> Draft:
         )
     if not steps_to_reproduce and case.reproduce:
         steps_to_reproduce = f"Send this request:\n```\n{case.reproduce}\n```"
+    if flaky and not v.steps_to_reproduce:
+        steps_to_reproduce = steps_to_reproduce or (
+            f"1. Run this test several times: {case.test_id or case.title}\n"
+            "2. Compare a passing run with a failing run.")
     steps_to_reproduce = steps_to_reproduce or v.steps_to_reproduce or "Not available — see evidence below."
 
-    actual_result = v.actual_result or case.message
-    expected_result = v.expected_result or "Not determined by the model."
+    actual_result = v.actual_result or (f"{case.message} ({v.root_cause})" if flaky else case.message)
+    expected_result = v.expected_result or ("The test passes on every run." if flaky
+                                            else "Not determined by the model.")
     environment = v.environment or _environment(case)
-    suggested_fix = v.suggested_fix or "Not determined by the model."
+    suggested_fix = v.suggested_fix or (
+        "Find what differs between passing and failing runs (timing, shared data, test order), "
+        "then make the test wait for it or isolate it." if flaky else "Not determined by the model.")
 
     # Screenshots stay local paths in the draft; the review queue shows them. Attaching them
     # to Jira is a separate, policy-controlled step (TODO v1: redaction before upload).
@@ -58,7 +66,7 @@ def ticket(case: Case, duplicates: list[str] | None = None) -> Draft:
     images += [e.image for e in cited if e.image and e.image not in images]
     draft = Draft(
         kind=DraftKind.ticket,
-        title=f"[{case.origin}] {case.message[:90] or case.title}",
+        title=f"[{'flaky' if flaky else case.origin}] {case.message[:90] or case.title}",
         body="",
         description=description,
         steps_to_reproduce=steps_to_reproduce,

@@ -157,17 +157,6 @@ def test_a_single_run_has_nothing_to_compare():
     assert report._compare([], {}, {})["has"] is False
 
 
-def test_the_comparison_panel_says_not_seen_is_not_fixed(tmp_path):
-    def setup(store):
-        store.save_case(_case("c1", "a"))
-        store.record_run(2, 2, 0, 0, {"a": 1, "b": 1}, at=T0)
-        store.record_run(1, 1, 0, 0, {"a": 1}, at=T0 + timedelta(days=1))
-
-    page = _page(tmp_path, setup)
-    assert "0 new, 0 came back, 1 not seen since the last run." in page
-    assert "Not seen is not the same as fixed" in page
-    assert "needs two runs" not in page.lower()
-
 
 # ---- merging another database
 
@@ -319,10 +308,6 @@ def test_the_drawer_data_is_capped_for_large_suites(tmp_path, monkeypatch):
     assert len(report.build(s, store, now=NOW)["details"]) == 2
 
 
-def test_tiles_and_table_rows_both_open_the_drawer(tmp_path):
-    page = _page(tmp_path, lambda store: store.save_case(_case("c1", "s1")))
-    assert 'class="tile' in page and page.count('data-case="c1"') == 2  # one tile, one row
-
 
 # ---- the short page
 
@@ -336,7 +321,7 @@ def test_the_management_view_keeps_the_summary_panels_and_drops_the_detail(tmp_p
     assert sorted(set(shown)) == sorted(report.SUMMARY_PANELS)
     assert shown[:2] == ["saved", "outcomes"]  # its own order, not the full page's
     assert "Tessella summary for shop" in short and "Tessella report for shop" in full
-    assert 'data-panel="cases"' not in short and 'data-panel="mosaic"' not in short
+    assert 'data-panel="cases"' not in short 
     assert '<script type="application/json" id="case-data">{}</script>' in short
     assert 'data-panel-row="cases"' not in short and 'data-panel-row="saved"' in short
     assert len(short) < len(full)
@@ -354,17 +339,6 @@ def test_every_panel_has_a_row_in_the_customize_drawer_and_a_summary_preset(tmp_
 
 
 # ---- the probe panel
-
-def test_the_probe_panel_never_claims_a_finding(tmp_path):
-    empty = _page(tmp_path, lambda store: None)
-    assert "No probe has run" in empty and "Schemathesis" in empty
-
-    def setup(store):
-        store.record_probe("checkout", 7, 4, {"boundaries.number": 6, "order.skip": 5}, at=T0)
-
-    page = _page(tmp_path, setup)
-    assert "11 changes planned across 1 flow." in page
-    assert "Planned only" in page and "sends nothing" in page
 
 
 # ---- the commands

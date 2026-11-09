@@ -278,3 +278,77 @@ def test_dashboard_starts_the_review_clock(queue):
     client, _app, store = queue
     client.get("/")
     assert "c1" in store.shown_ids()
+
+
+JUNIT_TWO = """<testsuite tests="2" failures="2">
+<testcase classname="t" name="test_one"><failure message="boom 1">boom 1</failure></testcase>
+<testcase classname="t" name="test_two"><failure message="boom 1">boom 1</failure></testcase></testsuite>"""
+
+
+def test_flaky_tests_always_get_a_draft_to_review(tmp_path, report, monkeypatch):
+    from tessella import board, pipeline
+    from tessella.draft.ticket import ticket
+
+    monkeypatch.setattr(pipeline, "_judge", lambda lead, *a, **k: Verdict(
+        category=Category.flaky, confidence=0.9, root_cause="Passed 1 of 3 re-runs: flaky"))
+    result = pipeline.triage(_triage_settings(tmp_path, report), rerun=False)
+    draft = result.cases[0].draft
+    assert draft.title.startswith("[flaky]") and draft.expected_result == "The test passes on every run."
+    assert "Passed 1 of 3" in draft.root_cause and "Not determined" not in draft.suggested_fix
+    assert "several times" in draft.steps_to_reproduce
+    row = board.classify(result)[0]
+    assert row.status == board.Status.new and "Passed 1 of 3" in row.note and "mark it flaky" in row.note
+    assert "1 flaky, drafted for review" in board.headline(result)
+
+
+def test_the_dashboard_drafts_flaky_failures_stored_before(queue):
+    client, _app, store = queue
+    store.save_case(Case(id="old", origin=Origin.test_failure, title="t", signature="f",
+                         verdict=Verdict(category=Category.flaky, confidence=0.9, root_cause="timing")))
+    client.get("/")
+    assert store.get_case("old").draft is not None
+
+
+def test_every_row_of_a_filed_failure_shows_its_status_and_ticket(tmp_path):
+    from tessella import report as page
+
+    settings = _triage_settings(tmp_path, tmp_path / "none")
+    store = Store(settings.storage.path)
+    for cid in ("a", "b"):
+        store.save_case(Case(id=cid, origin=Origin.test_failure, title=f"test_{cid}", signature="same",
+                             verdict=Verdict(category=Category.product_bug, confidence=0.9, root_cause="x")))
+    store.record(store.get_case("a"), Decision(action=Action.approve, by="anna", at=datetime(2026, 11, 8),
+                                               ticket_key="KAN-7", ticket_url="https://j/KAN-7"))
+    store.record_run(failures=2, clusters=1, recalled=1, drafted=0, detail={"same": 2})
+    html = page.render(page.build(settings, store))
+    table = html[html.index('<table class="cases">'):html.index("</table>", html.index('<table class="cases">'))]
+    assert table.count("Already on the board") == 2 and table.count(">KAN-7</a>") == 2
+    assert "same failure" not in table
+
+
+def test_comparison_is_plain_numbers_and_never_says_fixed(tmp_path):
+    from tessella import report as page
+
+    settings = _triage_settings(tmp_path, tmp_path / "none")
+    store = Store(settings.storage.path)
+    store.save_case(Case(id="a", origin=Origin.test_failure, title="a", signature="bug",
+                         verdict=Verdict(category=Category.product_bug, confidence=0.9, root_cause="x")))
+    store.save_case(Case(id="b", origin=Origin.test_failure, title="b", signature="fl",
+                         verdict=Verdict(category=Category.flaky, confidence=0.9, root_cause="x")))
+    store.record_run(failures=1, clusters=1, recalled=0, drafted=0, detail={"bug": 1}, at=datetime(2026, 11, 1))
+    store.record_run(failures=3, clusters=2, recalled=0, drafted=0, detail={"bug": 2, "fl": 1}, at=datetime(2026, 11, 2))
+    data = page.build(settings, store)
+    assert [(r["failed"], r["bugs"], r["flaky"]) for r in data["trend"]] == [(1, 1, 0), (3, 2, 1)]
+    body, take = page._trend_html(data)
+    assert take == "2 failed tests more than the previous run."
+    assert '<td class="chg bad">up 2</td>' in body and "fixed" not in body.lower()
+    assert page._trend_html({"trend": []})[1] == ""
+    assert "First run" in page._trend_html({"trend": data["trend"][:1]})[1]
+
+
+def test_probe_and_tiles_are_gone_from_the_dashboard(tmp_path):
+    from tessella import report as page
+
+    settings = _triage_settings(tmp_path, tmp_path / "none")
+    html = page.render(page.build(settings, Store(settings.storage.path)))
+    assert 'data-panel="probe"' not in html and 'data-panel="mosaic"' not in html

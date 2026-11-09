@@ -44,12 +44,6 @@
   --c-product_bug: #3987e5; --c-test_bug: #d95926; --c-flaky: #199e70;
   --c-environment: #c98500; --c-test_data: #d55181; --c-unknown: #8a949e; --c-none: #5d6670;
 }
-/* The mosaic well is dark in both themes, so its tiles always use the dark-surface colours. */
-.p-mosaic {
-  --w-bg: #0f151a; --w-ink: #eaeef1; --w-ink-2: #aeb9c2; --w-line: #2a3540;
-  --w-product_bug: #3987e5; --w-test_bug: #d95926; --w-flaky: #199e70;
-  --w-environment: #c98500; --w-test_data: #d55181; --w-unknown: #8a949e; --w-none: #aab3bb;
-}
 
 html { font-size: 16px; -webkit-text-size-adjust: 100%; }
 html[data-text="s"] { font-size: 14.5px; }
@@ -107,7 +101,7 @@ h1 {
   .p-funnel, .p-trust, .p-mix, .p-evidence, .p-compare { grid-column: span 6; }
 }
 @media (min-width: 1000px) {
-  .p-mosaic, .p-saved, .p-runs, .p-models, .p-outcomes { grid-column: span 8; }
+  .p-saved, .p-runs, .p-models, .p-outcomes { grid-column: span 8; }
   .p-funnel, .p-trust, .p-mix, .p-evidence, .p-compare { grid-column: span 4; }
   /* the short page: pairs that fill the row */
   body[data-view="management"] .p-saved { grid-column: span 8; }
@@ -125,55 +119,6 @@ h3 { font-size: 0.95rem; font-weight: 650; margin: 1.4rem 0 0.5rem; }
 .note { color: var(--ink-3); font-size: 0.82rem; max-width: 44em; margin: 0.8rem 0 0; }
 .empty { color: var(--ink-2); max-width: 36em; margin: 0; padding: 0.5rem 0; }
 
-/* the mosaic well */
-.p-mosaic { background: var(--w-bg); color: var(--w-ink); }
-.p-mosaic h2 { color: var(--w-ink); }
-.p-mosaic .lede { color: var(--w-ink-2); }
-.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0 0 1.1rem; }
-.chip-gap { width: 0.6rem; }
-.chip {
-  display: inline-flex; align-items: center; gap: 0.15rem; font-size: 0.82rem; cursor: pointer;
-  color: var(--w-ink); background: transparent; border: 1px solid var(--w-line); border-radius: 999px;
-  padding: 0.25rem 0.7rem 0.25rem 0.6rem;
-}
-.chip b { margin-left: 0.3rem; font-weight: 650; }
-.chip:hover { border-color: var(--w-ink-2); }
-.chip[aria-pressed="true"] { background: var(--w-ink); color: var(--w-bg); border-color: var(--w-ink); }
-.mosaic { display: flex; flex-wrap: wrap; gap: 1.6rem 1.8rem; align-items: flex-start; }
-.cluster { display: flex; flex-direction: column; gap: 0.5rem; max-width: 100%; }
-.tiles { display: grid; grid-template-columns: repeat(var(--cols), var(--tile)); gap: 3px; }
-.tile {
-  position: relative; display: block; width: var(--tile); height: var(--tile); border-radius: 4px;
-  border: 2px solid var(--hue); background: var(--hue); transition: opacity 0.15s, transform 0.15s;
-}
-.tile.is-open { background: color-mix(in srgb, var(--hue) 45%, var(--w-bg)); }
-.tile.cat-none { border-style: dashed; background: color-mix(in srgb, var(--hue) 30%, var(--w-bg)); }
-.tile.is-rejected { background: repeating-linear-gradient(135deg, var(--hue) 0 2px, transparent 2px 6px); }
-.tile.dim { opacity: 0.16; }
-a.tile:hover { transform: translateY(-2px); }
-.tile::after {
-  content: attr(data-glyph); position: absolute; inset: 0; display: grid; place-items: center;
-  font-weight: 800; font-size: calc(var(--tile) * 0.42); color: #0b0f12; line-height: 1;
-}
-.tile.is-rejected::after, .tile.is-open::after { color: var(--w-ink); }
-.mosaic[data-small] .tile::after { display: none !important; }
-.cap { margin: 0; font-size: 0.8rem; line-height: 1.3; color: var(--w-ink); }
-.cap span { color: var(--w-ink-2); }
-.mosaic[data-small] .cap { display: none; }
-.p-mosaic .cat-product_bug { --hue: var(--w-product_bug); }
-.p-mosaic .cat-test_bug { --hue: var(--w-test_bug); }
-.p-mosaic .cat-flaky { --hue: var(--w-flaky); }
-.p-mosaic .cat-environment { --hue: var(--w-environment); }
-.p-mosaic .cat-test_data { --hue: var(--w-test_data); }
-.p-mosaic .cat-unknown { --hue: var(--w-unknown); }
-.p-mosaic .cat-none { --hue: var(--w-none); }
-.p-mosaic .sw.st-open { background: var(--w-bg); box-shadow: inset 0 0 0 2px var(--w-ink-2); }
-.p-mosaic .sw.st-approved { background: var(--w-ink-2); box-shadow: none; }
-.p-mosaic .sw.st-rejected { background: repeating-linear-gradient(135deg, var(--w-ink-2) 0 2px, transparent 2px 4px); box-shadow: inset 0 0 0 1px var(--w-ink-2); }
-@media (prefers-reduced-motion: no-preference) {
-  .mosaic .tile { animation: settle 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(var(--i, 0) * 9ms); }
-  @keyframes settle { from { opacity: 0; transform: scale(0.55); } }
-}
 
 .cat-product_bug { --hue: var(--c-product_bug); }
 .cat-test_bug { --hue: var(--c-test_bug); }
@@ -297,7 +242,24 @@ tr[data-case] .test { cursor: pointer; }
 tr[data-case]:hover .test { text-decoration: underline; }
 tr.flash td { background: color-mix(in srgb, var(--focus) 22%, transparent); }
 
-/* one failure, opened from a tile or a table row */
+/* this run against the previous one */
+.p-compare { grid-column: 1 / -1; }
+table.trend { border-collapse: collapse; width: 100%; max-width: 34rem; margin: 0 0 1.2rem; font-size: 1rem; }
+table.trend th, table.trend td { padding: 0.45rem 0.7rem 0.45rem 0; text-align: right; border-bottom: 1px solid var(--line); }
+table.trend th:first-child { text-align: left; font-weight: 600; }
+table.trend thead th { color: var(--ink-3); font-size: 0.82rem; font-weight: 600; }
+table.trend .now { font-weight: 750; font-size: 1.2rem; }
+table.trend .chg { font-weight: 650; white-space: nowrap; }
+table.trend .chg.bad { color: #c0392b; } table.trend .chg.good { color: #16855e; } table.trend .chg.same { color: var(--ink-3); }
+ul.bars { list-style: none; display: flex; align-items: flex-end; gap: 0.7rem; height: 9rem; margin: 0; padding: 0; overflow-x: auto; }
+ul.bars li { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 2.6rem; font-size: 0.8rem; }
+ul.bars .stack { display: flex; flex-direction: column; width: 1.8rem; border-radius: 3px; overflow: hidden; }
+ul.bars small { color: var(--ink-3); white-space: nowrap; margin-top: 0.2rem; }
+ul.bars i, p.legend i { display: block; } i.bugs { background: var(--c-product_bug); } i.flaky { background: var(--c-flaky); } i.other { background: var(--c-none); }
+p.legend { display: flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--ink-2); margin: 0.6rem 0 0; }
+p.legend i { width: 0.7rem; height: 0.7rem; border-radius: 2px; margin-left: 0.6rem; } p.legend i:first-child { margin-left: 0; }
+
+/* one failure, opened from a table row */
 dialog.detail { width: min(46rem, 100%); }
 .stale { background: var(--panel); border-left: 4px solid var(--c-environment); border-radius: 6px; padding: 0.7rem 1rem; margin: 0 0 1rem; }
 .who { font-size: 0.85rem; color: var(--ink-2); }
@@ -382,7 +344,6 @@ h1 { font-size: clamp(1.35rem, 3vw, 2rem); margin: 1.2rem 0 1rem; max-width: 34e
 .pm { border: 0; background: transparent; cursor: pointer; border-radius: 4px; padding: 0 0.45rem;
       font-size: 1.2rem; line-height: 1.4; color: var(--ink-2); }
 .pm:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
-.p-mosaic .pm, .p-mosaic .grip { color: var(--w-ink-2); }
 .panel.collapsed .pb { display: none; }
 .panel.collapsed .ph { margin: 0; }
 .panel.dragging { opacity: 0.4; }
@@ -532,20 +493,6 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
       <label><input type="radio" name="density" value="compact"><span>Compact</span></label>
     </div></fieldset>
   <fieldset><legend>Failure tiles</legend>
-    <label class="flabel" for="pref-group">Group by</label>
-    <select id="pref-group" data-pref="group">
-      <option value="cluster">Cluster</option>
-      <option value="cat">Verdict</option>
-      <option value="state">Review status</option>
-    </select>
-    <label class="flabel" for="pref-tile" style="margin-top:0.8rem">Tile size</label>
-    <select id="pref-tile" data-pref="tile">
-      <option value="auto">Automatic</option>
-      <option value="16">Small</option>
-      <option value="28">Medium</option>
-      <option value="44">Large</option>
-      <option value="64">Extra large</option>
-    </select>
   </fieldset>
   <fieldset><legend>Panels</legend>
     <div class="actions" style="margin:0 0 0.7rem">
@@ -587,7 +534,7 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
 <script>
 (function () {
   var KEY = "tessella-prefs-v2";
-  var DEF = { theme: "auto", text: "m", density: "comfortable", marks: false, group: "cluster",
+  var DEF = { theme: "auto", text: "m", density: "comfortable", 
               tile: "auto", hidden: [], order: [], refresh: false, tab: "run", sizes: {}, collapsed: [],
               fview: "table" };
   var root = document.documentElement;
@@ -596,7 +543,6 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
   var panels = Array.prototype.slice.call(grid.querySelectorAll(".panel"));
   var ids = panels.map(function (p) { return p.getAttribute("data-panel"); });
   var cfg = load();
-  var filters = { cat: [], state: [] };
   var timer = null;
 
   function load() {
@@ -640,65 +586,7 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
     });
   }
 
-  /* the mosaic: regroup, size, filter */
-  var catOrder = ["product_bug", "test_bug", "flaky", "environment", "test_data", "unknown", "none"];
-  var stateOrder = ["open", "approved", "rejected"];
-  var stateLabel = { open: "Waiting", approved: "Approved", rejected: "Rejected" };
   function plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }
-  function regroup() {
-    var m = document.getElementById("mosaic");
-    if (!m) return;
-    var tiles = Array.prototype.slice.call(m.querySelectorAll(".tile"));
-    var by = cfg.group, groups = {}, keys = [];
-    tiles.forEach(function (t) {
-      var k = by === "cat" ? t.getAttribute("data-cat") : by === "state" ? t.getAttribute("data-state") : t.getAttribute("data-cluster");
-      if (!groups[k]) { groups[k] = []; keys.push(k); }
-      groups[k].push(t);
-    });
-    if (by === "cat") keys.sort(function (a, b) { return catOrder.indexOf(a) - catOrder.indexOf(b); });
-    else if (by === "state") keys.sort(function (a, b) { return stateOrder.indexOf(a) - stateOrder.indexOf(b); });
-    else keys.sort(function (a, b) { return groups[b].length - groups[a].length; });
-    while (m.firstChild) m.removeChild(m.firstChild);
-    var i = 0;
-    keys.forEach(function (k) {
-      var g = groups[k], n = g.length;
-      var wrap = document.createElement("div"); wrap.className = "cluster";
-      wrap.style.setProperty("--cols", Math.max(1, Math.ceil(Math.sqrt(n))));
-      var box = document.createElement("div"); box.className = "tiles";
-      g.forEach(function (t) { t.style.setProperty("--i", Math.min(i++, 60)); box.appendChild(t); });
-      var cap = document.createElement("p"); cap.className = "cap";
-      var label = by === "state" ? stateLabel[k] : g[0].getAttribute("data-label");
-      cap.appendChild(document.createTextNode(label));
-      cap.appendChild(document.createElement("br"));
-      var sp = document.createElement("span"); sp.textContent = plural(n, "test"); cap.appendChild(sp);
-      wrap.appendChild(box); wrap.appendChild(cap); m.appendChild(wrap);
-    });
-    applyFilters();
-  }
-  function applyTileSize() {
-    var m = document.getElementById("mosaic");
-    if (!m) return;
-    var px = cfg.tile === "auto" ? +m.getAttribute("data-auto") : +cfg.tile;
-    m.style.setProperty("--tile", px + "px");
-    if (px < 28) m.setAttribute("data-small", ""); else m.removeAttribute("data-small");
-  }
-  function applyFilters() {
-    var any = filters.cat.length || filters.state.length;
-    Array.prototype.forEach.call(document.querySelectorAll(".mosaic .tile"), function (t) {
-      var ok = (!filters.cat.length || filters.cat.indexOf(t.getAttribute("data-cat")) >= 0) &&
-               (!filters.state.length || filters.state.indexOf(t.getAttribute("data-state")) >= 0);
-      t.classList.toggle("dim", any && !ok);
-    });
-  }
-  Array.prototype.forEach.call(document.querySelectorAll(".chip"), function (c) {
-    c.addEventListener("click", function () {
-      var list = filters[c.getAttribute("data-filter")], v = c.getAttribute("data-value");
-      var at = list.indexOf(v);
-      if (at >= 0) list.splice(at, 1); else list.push(v);
-      c.setAttribute("aria-pressed", at < 0 ? "true" : "false");
-      applyFilters();
-    });
-  });
 
   /* look and feel */
   function applyLook() {
@@ -715,11 +603,9 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
       var r = document.querySelector('input[name="' + k + '"][value="' + cfg[k] + '"]');
       if (r) r.checked = true;
     });
-    document.getElementById("pref-group").value = cfg.group;
-    document.getElementById("pref-tile").value = cfg.tile;
     document.querySelector('[data-pref="refresh"]').checked = !!cfg.refresh;
   }
-  function applyAll() { applyLook(); applyPanels(); applyTileSize(); applyRefresh(); syncControls(); applyFview(); }
+  function applyAll() { applyLook(); applyPanels(); applyRefresh(); syncControls(); applyFview(); }
 
   /* controls */
   var dlg = document.getElementById("prefs");
@@ -732,16 +618,13 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
   document.getElementById("done-prefs").addEventListener("click", closeDlg);
   dlg.addEventListener("click", function (e) { if (e.target === dlg) closeDlg(); });
   document.getElementById("reset-prefs").addEventListener("click", function () {
-    var regroupNeeded = cfg.group !== DEF.group;
-    cfg = Object.assign({}, DEF); save(); applyAll(); if (regroupNeeded) regroup();
+    cfg = Object.assign({}, DEF); save(); applyAll();
   });
   ["theme", "text", "density"].forEach(function (k) {
     Array.prototype.forEach.call(document.querySelectorAll('input[name="' + k + '"]'), function (r) {
       r.addEventListener("change", function () { cfg[k] = r.value; save(); applyLook(); });
     });
   });
-  document.getElementById("pref-group").addEventListener("change", function (e) { cfg.group = e.target.value; save(); regroup(); });
-  document.getElementById("pref-tile").addEventListener("change", function (e) { cfg.tile = e.target.value; save(); applyTileSize(); });
   document.querySelector('[data-pref="refresh"]').addEventListener("change", function (e) { cfg.refresh = e.target.checked; save(); applyRefresh(); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-show]"), function (cb) {
     cb.addEventListener("change", function () {
@@ -1000,13 +883,13 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
   }
   function seconds(s) { return s == null ? null : s < 90 ? Math.round(s) + " seconds" : (s / 60).toFixed(1) + " minutes"; }
   function listed() {
-    return Array.prototype.filter.call(document.querySelectorAll(".mosaic .tile[data-case]"), function (t) { return !t.classList.contains("dim") && data[t.getAttribute("data-case")]; })
+    return Array.prototype.filter.call(document.querySelectorAll("tr[data-case]"), function (t) { return data[t.getAttribute("data-case")]; })
       .map(function (t) { return t.getAttribute("data-case"); });
   }
   var TICKET = [["title", "Title", "title", "title"], ["description", "Description", "textarea", "description"], ["steps", "Steps to reproduce", "textarea", "steps_to_reproduce"],
                 ["actual", "Actual result", "textarea", "actual_result"], ["expected", "Expected result", "textarea", "expected_result"],
                 ["environment", "Environment", "textarea", "environment"], ["root_cause", "Root cause (suspected)", "textarea", "root_cause"], ["fix", "Suggested fix", "textarea", "suggested_fix"]];
-  var CHOICES = [["flaky", "Flaky test"], ["environment", "Environment problem"], ["test_data", "Test data problem"],
+  var CHOICES = [["flaky", "Flaky test, no ticket needed"], ["environment", "Environment problem"], ["test_data", "Test data problem"],
                  ["test_bug", "Test bug, no ticket needed"], ["not_a_bug", "Not a bug"], ["duplicate", "Duplicate of an existing ticket"]];
   var boardName = {{board_json}};
   /* after a decision, straight to the next failure that needs a person */
@@ -1035,7 +918,7 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
     var select = el("select"); select.id = "decision-select"; label.htmlFor = select.id;
     var rec = { flaky: 1, environment: 1, test_data: 1 }[c.category] ? c.category : "";
     if (!c.draft && !rec) select.appendChild(new Option("Choose…", ""));
-    select.appendChild(new Option(c.draft ? "Real bug: file this ticket" : "It is a bug: write a ticket", c.draft ? "approve" : "write"));
+    select.appendChild(new Option(!c.draft ? "It is a bug: write a ticket" : c.category === "flaky" ? "File this ticket" : "Real bug: file this ticket", c.draft ? "approve" : "write"));
     CHOICES.forEach(function (o) { select.appendChild(new Option(o[1] + (o[0] === rec ? " (suggested)" : ""), o[0])); });
     select.value = c.draft ? "approve" : rec;
     var go = el("button"); go.type = "button"; var err = el("p", null, "err"); err.hidden = true;
@@ -1163,7 +1046,7 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
     row.scrollIntoView({ block: "center" }); row.classList.add("flash"); setTimeout(function () { row.classList.remove("flash"); }, 1600);
   });
   document.addEventListener("click", function (e) {
-    var t = e.target.closest && e.target.closest("a.tile[data-case], tr[data-case], .card[data-case]");
+    var t = e.target.closest && e.target.closest("tr[data-case], .card[data-case]");
     if (!t || (e.target.closest && e.target.closest("tr a, .card a, .card button"))) return;
     if (t.classList.contains("card") && !e.target.closest(".ct, .thumb")) return;
     if (openCase(t.getAttribute("data-case"))) e.preventDefault();
@@ -1227,9 +1110,7 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
   }
 
   /* start */
-  Array.prototype.forEach.call(document.querySelectorAll(".mosaic .tile"), function (t, i) { t.style.setProperty("--i", Math.min(i, 60)); });
   applyAll();
-  if (cfg.group !== "cluster") regroup();
 })();
 </script>
 </body>

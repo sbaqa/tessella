@@ -18,7 +18,7 @@ from tessella.models import Case, Category
 
 # Hidden in the rendered comment; finds Tessella's own comment on the next run.
 MARKER = "<!-- tessella-ci-summary -->"
-_ACTIONABLE = (Category.product_bug, Category.test_bug)
+_ACTIONABLE = (Category.product_bug, Category.test_bug, Category.flaky)
 
 
 # Where this action's docs live, linked when a runner has no model.

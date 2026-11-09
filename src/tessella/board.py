@@ -73,6 +73,10 @@ def classify(result) -> list[Row]:
             rows.append(Row(sig, Status.likely_on_board, [m["key"] for m in matches],
                             before + f"probably already {best['key']} ({best['summary'][:60]}, "
                             f"score {best['score']}): mark it duplicate unless it differs"))
+        elif lead.draft and v and v.category == Category.flaky:
+            rows.append(Row(sig, Status.new, category="flaky", note=before + (
+                f"{v.root_cause[:120].rstrip('.')}. A draft is ready: approve it to track this test, "
+                "or mark it flaky to close it")))
         elif lead.draft:
             rows.append(Row(sig, Status.new, note=before + "new bug: draft ready, approve to file it"))
         elif v and v.category not in (Category.product_bug, Category.test_bug):
@@ -117,12 +121,15 @@ def headline(result, rows: list[Row] | None = None) -> str:
         keys = ", ".join(r.tickets[0] for r in likely)
         parts.append(f"{len(likely)} probably already on the board ({keys}): "
                      "check the draft before filing")
-    if by[Status.new]:
-        parts.append(f"{len(by[Status.new])} new, drafted with all details and waiting for review")
+    bugs = [r for r in by[Status.new] if r.category != "flaky"]
+    if bugs:
+        parts.append(f"{len(bugs)} new, drafted with all details and waiting for review")
+    if len(bugs) < len(by[Status.new]):
+        parts.append(f"{len(by[Status.new]) - len(bugs)} flaky, drafted for review")
     if by[Status.your_call]:
         kinds = Counter(r.category.replace("_", " ") or "unknown" for r in by[Status.your_call])
         parts.append(", ".join(f"{n} {k}" for k, n in kinds.most_common())
-                     + " (not a bug ticket, nothing filed): your call")
+                     + " (not a bug ticket, nothing filed): needs your decision")
     if by[Status.decided]:
         parts.append(f"{len(by[Status.decided])} decided earlier without a ticket")
     if by[Status.pending]:

@@ -201,15 +201,6 @@ def test_every_panel_can_be_hidden_and_reordered(tmp_path):
         assert f'data-move="up" data-for="{pid}"' in page and f'data-show="{pid}"' in page
 
 
-def test_tiles_carry_what_the_filters_and_grouping_need(tmp_path):
-    page = _page(tmp_path)
-    assert page.count('class="tile ') == 6  # one tile per failure, not per cluster
-    for attr in ('data-cat="product_bug"', 'data-state="approved"', 'data-state="rejected"',
-                 'data-state="open"', 'data-cluster="a"', 'data-glyph="P"'):
-        assert attr in page, attr
-    assert 'data-filter="cat" data-value="flaky"' in page
-
-
 def test_funnel_tiles_stand_for_several_when_there_are_many():
     t = {"failures": 200, "clusters": 10, "drafted": 5, "drafted_approved": 3,
          "drafted_filed": 2, "decided": 0, "drafted_reviewed": 0}
