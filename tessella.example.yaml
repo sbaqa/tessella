@@ -140,6 +140,7 @@ redact: ["Authorization", "Cookie", "password", "card_number", "iban"]
 
 storage:
   path: .tessella/tessella.sqlite
+  # decisions_file: tessella-decisions.jsonl   # commit it, so CI knows your decisions
 
 # The project's own Ollama server: models live in this repository's .tessella/models (found
 # from any subfolder, e.g. examples/demo_shop), and Tessella starts the server when a role

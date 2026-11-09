@@ -30,7 +30,14 @@ CREATE TABLE IF NOT EXISTS decisions (
     board TEXT,
     ticket_key TEXT,
     ticket_url TEXT,
-    linked_existing INTEGER NOT NULL DEFAULT 0
+    linked_existing INTEGER NOT NULL DEFAULT 0,
+    pending INTEGER NOT NULL DEFAULT 0  -- approved offline, not filed yet
+);
+CREATE TABLE IF NOT EXISTS reopened (   -- rejections undone by a re-check; never imported again
+    signature TEXT NOT NULL,
+    rejected_at TEXT NOT NULL,
+    at TEXT NOT NULL,
+    PRIMARY KEY (signature, rejected_at)
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_signature ON decisions(signature);
 CREATE TABLE IF NOT EXISTS runs (
@@ -81,6 +88,12 @@ CREATE TABLE IF NOT EXISTS probe_plans (
     kinds TEXT NOT NULL             -- JSON {mutator: count}
 );
 """
+
+
+def _edited(payload: str) -> bool:
+    """Has a reviewer changed this case's draft? Their words are not replaced by a merge."""
+    draft = json.loads(payload).get("draft") or {}
+    return bool(draft.get("original"))
 
 
 class Store:
@@ -205,11 +218,11 @@ class Store:
                 return False
             self.db.execute(
                 "INSERT INTO decisions (case_id, signature, action, reason, by, at, "
-                "board, ticket_key, ticket_url, linked_existing) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "board, ticket_key, ticket_url, linked_existing, pending) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (case.id, case.signature, decision.action, decision.reason, decision.by,
                  decision.at.isoformat(), decision.board, decision.ticket_key, decision.ticket_url,
-                 int(decision.linked_existing)),
+                 int(decision.linked_existing), int(decision.pending)),
             )
             self.db.commit()
             return True
@@ -218,13 +231,13 @@ class Store:
         """Most recent approve/reject for a signature. Deletes are not training signal."""
         with self._lock:
             row = self.db.execute(
-                "SELECT action, reason, by, at, board, ticket_key, ticket_url FROM decisions "
+                "SELECT action, reason, by, at, board, ticket_key, ticket_url, pending FROM decisions "
                 "WHERE signature = ? AND action != 'delete' ORDER BY id DESC LIMIT 1",
                 (signature,),
             ).fetchone()
         if not row:
             return None
-        action, reason, by, at, board, ticket_key, ticket_url = row
+        action, reason, by, at, board, ticket_key, ticket_url, pending = row
         return Decision(
             action=Action(action),
             reason=RejectReason(reason) if reason else None,
@@ -233,6 +246,7 @@ class Store:
             board=board,
             ticket_key=ticket_key,
             ticket_url=ticket_url,
+            pending=bool(pending),
         )
 
     def forget(self, signature: str) -> None:
@@ -247,20 +261,69 @@ class Store:
             self.db.execute("DELETE FROM ticket_outcomes WHERE signature = ?", (signature,))
             self.db.commit()
 
+    def reopen(self, signature: str, rejected: Decision) -> None:
+        """A re-check found new evidence against a rejection: back to the queue, and that
+        rejection is remembered so the decisions file cannot bring it back."""
+        self.forget(signature)
+        with self._lock:
+            self.db.execute("INSERT OR IGNORE INTO reopened (signature, rejected_at, at) VALUES (?, ?, ?)",
+                            (signature, rejected.at.isoformat(), datetime.now().isoformat()))
+            self.db.commit()
+
+    def import_decisions(self, entries: list[dict]) -> int:
+        """Add decisions from the committed decisions file. What this store already decided
+        for a failure stands; a rejection a re-check undid stays undone. Returns rows added."""
+        added = 0
+        with self._lock:
+            have = {tuple(r) for r in self.db.execute(
+                "SELECT case_id, signature FROM decisions WHERE action != 'delete'")}
+            undone = {tuple(r) for r in self.db.execute("SELECT signature, rejected_at FROM reopened")}
+            for e in entries:
+                if (e["case_id"], e["signature"]) in have or (e["signature"], e["at"]) in undone:
+                    continue
+                self.db.execute(
+                    "INSERT INTO decisions (case_id, signature, action, reason, by, at, board, "
+                    "ticket_key, ticket_url, linked_existing, pending) VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, 0, ?)",
+                    (e["case_id"], e["signature"], e["action"], e.get("reason"), e["at"], e.get("board"),
+                     e.get("ticket_key"), e.get("ticket_url"), int(bool(e.get("pending")))))
+                added += 1
+            self.db.commit()
+        return added
+
+    def pending_filings(self) -> list[tuple[Case, Decision]]:
+        """Approvals made while the board was out of reach, oldest first."""
+        return [pair for pair in reversed(self.recent_decisions(limit=1000)) if pair[1].pending]
+
+    def mark_filed(self, case: Case, decision: Decision) -> None:
+        with self._lock:
+            self.db.execute(
+                "UPDATE decisions SET pending = 0, board = ?, ticket_key = ?, ticket_url = ?, "
+                "linked_existing = ? WHERE case_id = ? AND signature = ? AND pending = 1",
+                (decision.board, decision.ticket_key, decision.ticket_url, int(decision.linked_existing),
+                 case.id, case.signature))
+            self.db.commit()
+
+    def snapshot(self, target: str | Path) -> None:
+        """A complete copy of this database in one file, safe to hand to another machine."""
+        with self._lock:
+            self.db.commit()
+            self.db.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+            self.db.execute("VACUUM INTO ?", (str(target),))
+
     def recent_decisions(self, limit: int = 20, current: bool = False) -> list[tuple[Case, Decision]]:
         """Most recently decided cases, newest first, for the queue's history view. `current`
         keeps only decisions on each case's current failure: a test that has since failed
         another way shows once, as an open case, not again under an old decision."""
         with self._lock:
             rows = self.db.execute(
-                "SELECT c.payload, d.action, d.reason, d.by, d.at, d.board, d.ticket_key, d.ticket_url "
+                "SELECT c.payload, d.action, d.reason, d.by, d.at, d.board, d.ticket_key, d.ticket_url, d.pending "
                 "FROM decisions d JOIN cases c ON c.id = d.case_id "
                 + ("WHERE d.signature = c.signature " if current else "")
                 + "ORDER BY d.id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         out = []
-        for payload, action, reason, by, at, board, ticket_key, ticket_url in rows:
+        for payload, action, reason, by, at, board, ticket_key, ticket_url, pending in rows:
             case = Case.model_validate_json(payload)
             decision = Decision(
                 action=Action(action),
@@ -270,6 +333,7 @@ class Store:
                 board=board,
                 ticket_key=ticket_key,
                 ticket_url=ticket_url,
+                pending=bool(pending),
             )
             out.append((case, decision))
         return out
@@ -330,14 +394,14 @@ class Store:
         with self._lock:
             rows = self.db.execute(
                 "SELECT signature, action, reason, by, at, board, ticket_key, ticket_url, "
-                "linked_existing FROM decisions WHERE action != 'delete' ORDER BY id"
+                "linked_existing, pending FROM decisions WHERE action != 'delete' ORDER BY id"
             ).fetchall()
         return [
             (sig, Decision(action=Action(action), reason=RejectReason(reason) if reason else None,
                            by=by, at=datetime.fromisoformat(at), board=board,
                            ticket_key=ticket_key, ticket_url=ticket_url,
-                           linked_existing=bool(linked)))
-            for sig, action, reason, by, at, board, ticket_key, ticket_url, linked in rows
+                           linked_existing=bool(linked), pending=bool(pending)))
+            for sig, action, reason, by, at, board, ticket_key, ticket_url, linked, pending in rows
         ]
 
     # -- measurements behind "time saved" -------------------------------------------------------
@@ -460,7 +524,8 @@ class Store:
         """Add what `other_path` knows and this store does not. Returns rows added per table.
 
         Nothing here is overwritten except: a case with no verdict here takes the other copy's
-        verdict, an earlier first-shown time wins, and the newer ticket check wins. Decisions
+        verdict, an undecided case nobody edited here takes a newer run's copy, an earlier
+        first-shown time wins, and the newer ticket check wins. Decisions
         are matched on case, action and time, so merging the same file twice adds nothing.
         The other file is read through a temporary copy and is never modified."""
         import shutil
@@ -481,6 +546,9 @@ class Store:
                 with self._lock, other._lock:
                     mine, theirs = self.db, other.db
                     have_cases = dict(mine.execute("SELECT id, payload FROM cases"))
+                    created_here = dict(mine.execute("SELECT id, created_at FROM cases"))
+                    decided_here = {r[0] for r in mine.execute(
+                        "SELECT case_id FROM decisions WHERE action != 'delete'")}
                     for cid, sig, origin, title, payload, created in theirs.execute(
                             "SELECT id, signature, origin, title, payload, created_at FROM cases"):
                         if cid not in have_cases:
@@ -491,17 +559,29 @@ class Store:
                         elif '"verdict":null' in have_cases[cid].replace(" ", "") \
                                 and '"verdict":null' not in payload.replace(" ", ""):
                             mine.execute("UPDATE cases SET payload = ? WHERE id = ?", (payload, cid))
+                        elif (created > created_here[cid] and cid not in decided_here
+                                and '"verdict":null' not in payload.replace(" ", "")
+                                and not _edited(have_cases[cid])):
+                            mine.execute("UPDATE cases SET signature = ?, title = ?, payload = ?, created_at = ? "
+                                         "WHERE id = ?", (sig, title, payload, created, cid))
                     seen = {(c, a, t) for c, a, t in mine.execute(
                         "SELECT case_id, action, at FROM decisions")}
                     for row in theirs.execute(
                             "SELECT case_id, signature, action, reason, by, at, board, ticket_key, "
-                            "ticket_url, linked_existing FROM decisions ORDER BY id"):
+                            "ticket_url, linked_existing, pending FROM decisions ORDER BY id"):
                         if (row[0], row[2], row[5]) in seen:
                             continue
                         mine.execute("INSERT INTO decisions (case_id, signature, action, reason, by, "
-                                     "at, board, ticket_key, ticket_url, linked_existing) "
-                                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
+                                     "at, board, ticket_key, ticket_url, linked_existing, pending) "
+                                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
                         added["decisions"] += 1
+                    # A rejection the other side re-checked and undid is undone here too.
+                    for sig, rejected_at, at in theirs.execute(
+                            "SELECT signature, rejected_at, at FROM reopened"):
+                        mine.execute("INSERT OR IGNORE INTO reopened (signature, rejected_at, at) "
+                                     "VALUES (?, ?, ?)", (sig, rejected_at, at))
+                        mine.execute("DELETE FROM decisions WHERE signature = ? AND at = ? AND action = 'reject'",
+                                     (sig, rejected_at))
                     seen_runs = {r[0] for r in mine.execute("SELECT at FROM runs")}
                     for row in theirs.execute(
                             "SELECT at, failures, clusters, recalled, drafted, detail, duration_s, "

@@ -96,7 +96,7 @@ def test_queue_saves_an_edit_without_filing(queue):
     assert case.draft.root_cause == "my words" and case.draft.expected_result == "the total matches"
     assert not store.decided("c1")
     page = client.get("/").text
-    assert "Edited by sdet" in page and "my words" in page and "Undo my edits" in page
+    assert "my words" in page and '"edited_by":"sdet"' in page and '"changed":["root_cause"]' in page
 
 
 def test_queue_edit_needs_the_form_token(queue):
@@ -243,3 +243,38 @@ def test_history_counts_earlier_runs_only(tmp_path, report, monkeypatch):
     second = triage(settings, rerun=False, use_model=False)
     sig = next(iter(first.clusters))
     assert first.history[sig] == (0, 0) and second.history[sig] == (1, 1)
+
+
+def test_a_failure_with_no_draft_can_still_become_a_ticket(queue):
+    client, app, store = queue
+    bare = Case(id="c2", origin=Origin.test_failure, title="test_b", message="boom", signature="s2")
+    store.save_case(bare)
+    r = client.post("/cases/c2/draft", data={"csrf": app.state.csrf}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/#edit-c2"
+    case = store.get_case("c2")
+    assert case.verdict.category == Category.product_bug and case.verdict.confidence == 0
+    assert case.draft.root_cause == "Not determined by the model."
+    assert case.draft.expected_result == "Not determined by the model." and "boom" in case.draft.description
+    assert not store.decided("c2")  # writing it files nothing
+    assert client.post("/cases/c1/draft", data={}).status_code == 403
+
+
+def test_a_person_can_overrule_a_flaky_verdict(queue):
+    client, app, store = queue
+    flaky = Case(id="c3", origin=Origin.test_failure, title="t", signature="s3",
+                 verdict=Verdict(category=Category.flaky, confidence=0.9, root_cause="timing"))
+    store.save_case(flaky)
+    client.post("/cases/c3/draft", data={"csrf": app.state.csrf})
+    assert store.get_case("c3").draft.root_cause == "timing"
+    assert store.get_case("c3").verdict.category == Category.product_bug
+
+
+def test_the_page_says_when_no_triage_ran_in_this_folder(queue):
+    client, _app, _store = queue
+    assert "No triage has run in this folder" in client.get("/").text
+
+
+def test_dashboard_starts_the_review_clock(queue):
+    client, _app, store = queue
+    client.get("/")
+    assert "c1" in store.shown_ids()

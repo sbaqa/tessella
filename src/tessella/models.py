@@ -149,6 +149,8 @@ class Decision(BaseModel):
     # True when approving linked to a ticket that already carried this signature's label,
     # instead of filing a new one. Each such approval is a duplicate that was not created.
     linked_existing: bool = False
+    # Approved while the board could not be reached: filed as soon as it can be.
+    pending: bool = False
 
 
 class Case(BaseModel):
@@ -173,6 +175,10 @@ class Case(BaseModel):
     verdict: Verdict | None = None
     draft: Draft | None = None
     decision: Decision | None = None
+    # Rejected earlier and back in review because new evidence changed the verdict: what was
+    # decided, for the reviewer. `recheck_fingerprint` is the evidence last re-checked.
+    reopened_from: str = ""
+    recheck_fingerprint: str = ""
 
     @staticmethod
     def make_id(*parts: str) -> str:

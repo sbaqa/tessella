@@ -327,7 +327,7 @@ def notify(digest: Path = typer.Argument(..., help="The file tessella ci --diges
 def _send_email(s: config.Settings, d: dict, ctx: dict, links: list) -> None:
     """Email the summary, or say plainly why not. Never raises."""
     from tessella import egress
-    from tessella.integrations import ci_email
+    from tessella.integrations import ci_comment, ci_email
 
     if egress.active():
         console.print("[yellow]Not emailing:[/] offline mode.")
@@ -336,8 +336,9 @@ def _send_email(s: config.Settings, d: dict, ctx: dict, links: list) -> None:
         console.print("[yellow]Not emailing:[/] set the recipients and the SMTP host.")
         return
     try:
-        ci_email.send(s.ci.email, ci_email.subject(d, ctx), ci_email.text_body(d, ctx, links),
-                      ci_email.html_body(d, ctx, links), s.network.allow)
+        run = ci_comment.run_url()
+        ci_email.send(s.ci.email, ci_email.subject(d, ctx), ci_email.text_body(d, ctx, links, run),
+                      ci_email.html_body(d, ctx, links, run), s.network.allow)
         console.print(f"Emailed {_count_of(s.ci.email.to)}.")
     except Exception as exc:  # noqa: BLE001 - an email is never worth a failed build
         console.print(f"[yellow]Could not email:[/] {exc}")
@@ -378,11 +379,14 @@ def queue(cfg: Optional[Path] = typer.Option(None, "--config", "-c"), port: int 
           tls_cert: Optional[Path] = typer.Option(None, "--tls-cert", help="Serve HTTPS with this certificate."),
           tls_key: Optional[Path] = typer.Option(None, "--tls-key", help="... and this private key."),
           no_sign_in: bool = typer.Option(False, "--no-sign-in", help="Listen beyond loopback without reviewers. Only inside a container whose port is published to 127.0.0.1.")):
-    """Open the review queue: on this machine, or for a team with each reviewer signed in."""
+    """Open the dashboard: on this machine, or for a team with each reviewer signed in."""
     from tessella.queue.app import serve
 
     serve(_settings(cfg, models=False), port, host=host, tls_cert=str(tls_cert) if tls_cert else None,
           tls_key=str(tls_key) if tls_key else None, no_sign_in=no_sign_in)
+
+
+app.command("dashboard", help="Open the dashboard. Same as tessella queue.")(queue)
 
 
 @app.command()
@@ -454,6 +458,59 @@ def merge(
 
 
 @app.command()
+def snapshot(out: Path = typer.Argument(Path(".tessella/ci-export"), help="Folder to write."),
+             cfg: Optional[Path] = typer.Option(None, "--config", "-c")):
+    """Copy the database and its screenshots into one folder, for CI to publish as an artifact named tessella-db."""
+    import shutil
+
+    from tessella.memory.store import Store
+
+    s = config.load(cfg)
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir(parents=True)
+    Store(s.storage.path).snapshot(out / "tessella.sqlite")
+    shots = Path(s.storage.path).parent / "screenshots"
+    if shots.is_dir():
+        shutil.copytree(shots, out / "screenshots")
+    console.print(f"Snapshot written to [bold]{out}[/]")
+
+
+@app.command()
+def review(source: Optional[str] = typer.Argument(None, help="Link to a CI run (GitHub, GitLab, Azure DevOps, Jenkins, CircleCI), or the downloaded tessella-db artifact. Omit to review what is already here."),
+           case: Optional[str] = typer.Option(None, "--case", help="Open this failure's card."),
+           cfg: Optional[Path] = typer.Option(None, "--config", "-c"),
+           port: int = 8484,
+           no_open: bool = typer.Option(False, "--no-open", help="Do not open the browser.")):
+    """Bring a CI run's results here and open the review queue. After the download, everything works offline."""
+    import socket
+    import threading
+    import webbrowser
+
+    from tessella import review as loader
+    from tessella.memory.store import Store
+    from tessella.queue.app import serve
+
+    s = _settings(cfg, models=False)
+    if source:
+        try:
+            added = loader.load(s, Store(s.storage.path), source)
+        except Exception as exc:  # noqa: BLE001 - a plain reason, not a traceback
+            console.print(f"[red]Could not load that run:[/] {exc}")
+            raise typer.Exit(1)
+        console.print(f"Loaded: {added['cases']} new failure(s), {added['decisions']} decision(s).")
+    url = f"http://127.0.0.1:{port}/" + (f"#case-{case}" if case else "")
+    with socket.socket() as probe:
+        running = probe.connect_ex(("127.0.0.1", port)) == 0
+    if not no_open:
+        threading.Timer(0 if running else 1.5, webbrowser.open, [url]).start()
+    if running:
+        console.print(f"The dashboard is already running: {url}")
+        return
+    console.print(f"Dashboard: {url}  Decisions are saved to [bold]{s.storage.decisions_file}[/]; commit it so CI knows them.")
+    serve(s, port)
+
+
+@app.command()
 def calibrate(
     signature: Optional[str] = typer.Argument(None, help="Cluster to time (signature or prefix). Default: the next one you have not seen in the queue."),
     minutes: Optional[float] = typer.Option(None, "--minutes", help="Record a time you already know, instead of using the stopwatch."),
@@ -522,6 +579,7 @@ def forget(
     cfg: Optional[Path] = typer.Option(None, "--config", "-c"),
 ):
     """List recorded decisions, or drop one so its failure returns to the review queue."""
+    from tessella.memory import decisions_file
     from tessella.memory.store import Store
 
     store = Store(_settings(cfg, models=False).storage.path)
@@ -552,6 +610,7 @@ def forget(
         raise typer.Exit(1)
     sig, (action, key) = next(iter(matches.items()))
     store.forget(sig)
+    decisions_file.remove(_settings(cfg, models=False), sig)
     console.print(f"Forgot {sig} ({action}{', ' + key if key else ''}). "
                   "It returns to the queue on the next triage or queue load.")
 

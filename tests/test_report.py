@@ -190,7 +190,7 @@ def _page(tmp_path, live=False):
 def test_live_flag_links_back_to_the_queue(tmp_path):
     assert 'data-live="false"' in _page(tmp_path) and 'href="/"' not in _page(tmp_path)
     live = _page(tmp_path, live=True)
-    assert 'data-live="true"' in live and 'href="/">Review queue</a>' in live
+    assert 'data-live="true"' in live and "Review queue" not in live
 
 
 def test_every_panel_can_be_hidden_and_reordered(tmp_path):
@@ -245,7 +245,7 @@ def test_queue_serves_the_live_report(tmp_path):
     # a decision made in the queue shows up on the next load, without rebuilding anything
     client.post(f"/cases/{_case('c', 0).id}/decide", data={"action": "approve", "csrf": app.state.csrf})
     assert "2 approved, 1 rejected." in client.get("/report").text
-    assert "Open the dashboard" in client.get("/").text
+    assert client.get("/").text.count('data-live="true"') == 1  # the dashboard is the home page
 
 
 def test_failures_table_says_what_is_already_filed_and_what_is_new(tmp_path):

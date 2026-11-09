@@ -62,11 +62,12 @@ def digest(cases: list[Case], queue_url: str | None = None, result=None) -> dict
     out: dict = {"headline": None, "note": None, "queue_url": queue_url, "rows": [], "more": 0,
                  "counts": dict(Counter(str(c.verdict.category) if c.verdict else "not judged"
                                         for c in cases).most_common())}
-    status, on_board = {}, set()
+    status, on_board, decided = {}, set(), set()
     if result is not None:
         from tessella import board
 
         rows = board.classify(result)
+        decided = {r.signature for r in rows if r.status == board.Status.decided}
         status = {r.signature: r.note for r in rows}
         on_board = {r.signature for r in rows if r.status == board.Status.on_board}
         out["headline"] = board.headline(result, rows)
@@ -98,6 +99,7 @@ def digest(cases: list[Case], queue_url: str | None = None, result=None) -> dict
         if not v and result is not None and lead.signature not in on_board:
             board_note = "no ticket for this failure yet" if checked else "board not checked"
         out["rows"].append({
+            "case_id": lead.id, "open": lead.signature not in on_board and lead.signature not in decided,
             "title": lead.title, "tests": [c.title for c in members], "verdict": verdict,
             "category": category, "cause": cause, "board": board_note,
             "seen": _seen(history.get(lead.signature)),
@@ -138,6 +140,8 @@ def markdown(d: dict, run_link: str | None = None, links: list[tuple[str, str]] 
     reports = [*(links or []), *([("CI run", run_link)] if run_link else [])]
     if reports:
         lines += ["**Reports:** " + " · ".join(f"[{name}]({url})" for name, url in reports), ""]
+    if run_link and any(r.get("open") for r in d["rows"]):
+        lines += [f"**Review on your machine:** `tessella review {run_link}`", ""]
     if not d["rows"]:
         lines += ["No failures in the reports.", ""]
     lines += [f"- **{cat}**: {n}" for cat, n in d["counts"].items()]
@@ -187,6 +191,16 @@ def context(env: dict[str, str] | None = None) -> dict[str, str]:
                 "branch": env.get("CI_MERGE_REQUEST_SOURCE_BRANCH_NAME") or env.get("CI_COMMIT_REF_NAME", ""),
                 "commit": env.get("CI_COMMIT_SHORT_SHA", ""), "change": f"MR !{iid}" if iid else "",
                 "change_url": f"{url}/-/merge_requests/{iid}" if iid else ""}
+    if env.get("TF_BUILD"):  # Azure Pipelines
+        return {"repo": env.get("BUILD_REPOSITORY_NAME", ""), "branch": env.get("BUILD_SOURCEBRANCHNAME", ""),
+                "commit": env.get("BUILD_SOURCEVERSION", "")[:7], "change": "", "change_url": ""}
+    if env.get("JENKINS_URL"):
+        return {"repo": env.get("JOB_NAME", ""), "branch": env.get("BRANCH_NAME") or env.get("GIT_BRANCH", ""),
+                "commit": env.get("GIT_COMMIT", "")[:7], "change": "", "change_url": ""}
+    if env.get("CIRCLECI"):
+        return {"repo": f"{env.get('CIRCLE_PROJECT_USERNAME', '')}/{env.get('CIRCLE_PROJECT_REPONAME', '')}",
+                "branch": env.get("CIRCLE_BRANCH", ""), "commit": env.get("CIRCLE_SHA1", "")[:7],
+                "change": "", "change_url": ""}
     return {"repo": "", "branch": "", "commit": "", "change": "", "change_url": ""}
 
 
@@ -198,6 +212,13 @@ def run_url(env: dict[str, str] | None = None) -> str | None:
         return f"{server}/{env['GITHUB_REPOSITORY']}/actions/runs/{env['GITHUB_RUN_ID']}"
     if env.get("GITLAB_CI") == "true":
         return env.get("CI_PIPELINE_URL")
+    if env.get("TF_BUILD"):
+        return (f"{env.get('SYSTEM_COLLECTIONURI', '').rstrip('/')}/{quote(env.get('SYSTEM_TEAMPROJECT', ''))}"
+                f"/_build/results?buildId={env.get('BUILD_BUILDID', '')}")
+    if env.get("JENKINS_URL"):
+        return env.get("BUILD_URL")
+    if env.get("CIRCLECI"):
+        return env.get("CIRCLE_BUILD_URL")
     return None
 
 

@@ -193,7 +193,10 @@ def _details(clusters: list[dict], runs: list[dict], review_s: dict[str, float],
                 if outcome else None,
                 "cluster": c["signature"][:8], "size": len(c["tests"]),
                 "runs": seen.get(c["signature"], 0),
-                # The ticket approving would file, so the live board can show it before filing.
+                "reopened": lead.reopened_from,
+                "images": (len(lead.screenshots) + sum(1 for e in lead.evidence if e.image))
+                if m is lead else 0,
+                # The ticket approving would file, so the dashboard can show it before filing.
                 "draft": {"title": lead.draft.title, "description": lead.draft.description,
                           "steps": lead.draft.steps_to_reproduce,
                           "actual": lead.draft.actual_result,
@@ -202,7 +205,10 @@ def _details(clusters: list[dict], runs: list[dict], review_s: dict[str, float],
                           "root_cause": lead.draft.root_cause,
                           "fix": lead.draft.suggested_fix,
                           "screenshots": len(lead.draft.images),
-                          "duplicates": lead.draft.possible_duplicates}
+                          "duplicates": lead.draft.possible_duplicates,
+                          "edited_by": lead.draft.edited_by,
+                          "changed": sorted(lead.draft.original),
+                          "patch": lead.draft.patch, "patch_status": lead.draft.patch_status}
                 if lead.draft and m is lead else None,
             }
     return out
@@ -340,13 +346,19 @@ def build(settings: Settings, store: Store, now: datetime | None = None,
         st = board_view["status"].get(c["signature"], {})
         for m in c["members"]:
             if m.id in details:
-                details[m.id].update(todo=st.get("note", ""), category=c["category"],
-                                     lead=c["lead"].id)
+                note = st.get("note", "")
+                if c["category"] == "none":
+                    note = ("Tessella has not analysed this failure yet. Run tessella triage with a "
+                            "model here, or decide it yourself below.")
+                details[m.id].update(todo=note, category=c["category"], lead=c["lead"].id,
+                                     pending=bool(getattr(decisions.get(c["signature"]), "pending", False)))
     return {
         "board": board_view,
         "generated_at": now.isoformat(timespec="seconds"),
         "project": project or Path.cwd().name,
         "source": settings.storage.path,
+        "folder": str(Path.cwd()),
+        "board_name": settings.board,
         "totals": {
             "failures": n_fail, "clusters": len(clusters), "judged": len(judged),
             "drafted": len(drafted), "decided": len(decided), "approved": len(approved),
@@ -378,7 +390,7 @@ def build(settings: Settings, store: Store, now: datetime | None = None,
 # --------------------------------------------------------------------------- html
 
 GLYPHS = {"product_bug": "P", "test_bug": "T", "flaky": "F", "environment": "E",
-          "test_data": "D", "unknown": "?", "none": "-"}
+          "test_data": "D", "unknown": "?", "none": "…"}
 STATES = {"open": "Waiting", "approved": "Approved", "rejected": "Rejected"}
 # Panels in their default order: (id, title). The page lets the reader hide and reorder them.
 PANELS = [
@@ -496,7 +508,7 @@ def _mosaic(data: dict) -> str:
     by_cat, by_state = _tile_counts(data)
     chips = "".join(
         f'<button type="button" class="chip" data-filter="cat" data-value="{cat}" '
-        f'aria-pressed="false">{_swatch(cat)}{_e(LABELS[cat])} <b>{by_cat[cat]}</b></button>'
+        f'aria-pressed="false">{_swatch(cat)}{GLYPHS[cat]} {_e(LABELS[cat])} <b>{by_cat[cat]}</b></button>'
         for cat in CATEGORIES if by_cat[cat])
     chips += '<span class="chip-gap"></span>' + "".join(
         f'<button type="button" class="chip" data-filter="state" data-value="{st}" '
@@ -922,7 +934,11 @@ def _cases(data: dict, live: bool = False) -> str:
         return '<p class="empty">No cases stored.</p>'
     b = data["board"]
     order = {sig: i for i, sig in enumerate(b["latest"])}
-    clusters = sorted(data["clusters"], key=lambda c: order.get(c["signature"], len(order)))
+    # Within a run, what most needs a person first: bug drafts waiting, then the rest.
+    need = {"product_bug": 0, "test_bug": 1}
+    clusters = sorted(data["clusters"], key=lambda c: (
+        c["signature"] not in order, c["state"] != "open",
+        need.get(c["category"], 2) if c["has_draft"] else 3, order.get(c["signature"], 0)))
     rows, older_from = [], None
     for c in clusters:
         st = b["status"].get(c["signature"]) or {"status": "pending", "note": "", "links": [],
@@ -984,8 +1000,8 @@ def _kanban(data: dict, live: bool) -> str:
         thumb = (f'<img class="thumb" loading="lazy" alt="" src="/cases/{_e(lead.id)}/image/0">'
                  if live and lead.screenshots and Path(lead.screenshots[0]).is_file() else "")
         links = _ticket_links(st["links"])
-        decide = (f'<button type="button" class="decide" data-decide="{_e(lead.id)}" '
-                  f'aria-haspopup="menu">Decide&#8230;</button>' if live and open_ else "")
+        decide = (f'<button type="button" class="decide" data-decide="{_e(lead.id)}">Decide</button>'
+                  if live and open_ else "")
         cols[st["status"]].append(
             f'<article class="card" data-case="{_e(lead.id)}" data-open="{int(open_)}" '
             f'data-draft="{int(bool(lead.draft))}" draggable="{"true" if live and open_ else "false"}">'
@@ -1007,11 +1023,11 @@ def _kanban(data: dict, live: bool) -> str:
             f'{" data-needs-draft" if a == "approve" else ""}>{_e(label)}</div>'
             for a, r, label in DROPS)
         drops = (f'<div class="drops" aria-label="Drop a card here to decide it">{zones}</div>'
-                 '<p class="note">Drag a waiting card onto a decision, or use its Decide button. '
-                 "You confirm each one; approving files it to the board.</p>")
+                 '<p class="note">Drag a waiting card onto a decision, or open it to decide. '
+                 "You confirm each drag; approving files it to the board.</p>")
     else:
-        drops = ('<p class="note">Read-only in a saved report. Open it from the review queue '
-                 "(<code>tessella queue</code>, then Report) to decide cards by dragging them.</p>")
+        drops = ('<p class="note">Read-only in a saved report. To decide, run '
+                 "<code>tessella review</code> with this run's link.</p>")
     return f'{drops}<div class="kanban">{columns}</div>'
 
 
@@ -1079,7 +1095,18 @@ def _json_for_script(value: object) -> str:
             .replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026"))
 
 
-def render(data: dict, live: bool = False, view: str = "full", csrf: str | None = None) -> str:
+def _where(data: dict) -> str:
+    """A plain warning when these failures do not come from a recorded run in this folder."""
+    if data["runs"] or not data["clusters"]:
+        return ""
+    return ('<p class="stale"><b>No triage has run in this folder.</b> These failures are left over '
+            f'from an earlier import. You are looking at <code>{_e(data["folder"])}</code>. Run '
+            "<code>tessella triage</code> in your project's folder, or "
+            "<code>tessella review</code> with a CI run's link.</p>")
+
+
+def render(data: dict, live: bool = False, view: str = "full", csrf: str | None = None,
+           links: list[dict] | None = None, reviewer: str | None = None) -> str:
     """The page. `live` is set when the review queue serves it: it links back to the queue
     and offers an auto-refresh option. `view="management"` keeps only SUMMARY_PANELS."""
     if view not in VIEWS:
@@ -1138,18 +1165,22 @@ def render(data: dict, live: bool = False, view: str = "full", csrf: str | None 
         "details": _json_for_script(data["details"] if view == "full" else {}),
         "project": _e(data["project"]),
         "generated": _e(_when(data["generated_at"])),
-        "source": f'<span title="{_e(data["source"])}">{_e(Path(data["source"]).name)}</span>',
+        "source": f'<code title="{_e(data["source"])}">{_e(data["folder"])}</code>',
         "headline": (_action(data["board"]) if view == "full" and data["board"]["has"]
                      else _headline(t, data["time"])),
         "kpis": _kpis(data) if view == "full" else "",
         "tabs": _tabs(shown) if view == "full" else "",
-        "nav": '<a class="navlink" href="/">Review queue</a>' if live else "",
+        "nav": ((f'<span class="who">Signed in as <strong>{_e(reviewer)}</strong></span>' if reviewer else "")
+                + "".join(f'<a class="navlink" href="{_e(r["url"])}" target="_blank" rel="noopener">'
+                          f'{_e(r["name"])} &#8599;</a>' for r in links or [])),
+        "stale": _where(data) if view == "full" else "",
+        "board_json": json.dumps(data["board_name"] or ""),
         "live": "true" if live else "false",
         # The queue's form token, so the live board can record a decision. Only the queue
         # serves this, and only on its own origin: another site cannot read the page.
         "csrf": _e(csrf) if live and csrf and view == "full" else "",
-        "footer": ("Served by your review queue: screenshots come from it and decisions go only "
-                   "to it. Nothing is fetched from elsewhere." if live else
+        "footer": ("Served from this machine: screenshots come from it and decisions stay on it "
+                   "until you file a ticket. Nothing is fetched from elsewhere." if live else
                    "Nothing on this page was fetched. It is one file with no scripts or fonts from "
                    "elsewhere, so it can be attached to a CI run or sent as is."),
         "panels": panels,

@@ -53,20 +53,26 @@ def classify(result) -> list[Row]:
                 when = f" by {past.by} on {past.at:%d %b %Y}" if past.by else f" on {past.at:%d %b %Y}"
                 tail = ("; it stays closed (tessella forget " + sig[:8] + " to review it again)"
                         if past.action == Action.reject else
+                        "; it will be filed when the board can be reached" if past.pending else
                         "; no ticket was filed because no board was set up then. If it fails this "
                         "way again with a board set up, triage judges it afresh")
                 rows.append(Row(sig, Status.decided, note=f"{what}{when}{tail}"))
             continue
         reopened = getattr(result, "reopened", {}).get(sig)
-        before = (f"approved by {reopened.by} on {reopened.at:%d %b %Y} with no board, so nothing "
-                  "was filed; judged again now: " if reopened else "")
+        before = ""
+        if reopened and reopened.action == Action.reject:
+            before = (f"rejected as {str(reopened.reason).replace('_', ' ')} on {reopened.at:%d %b %Y}, "
+                      "but new evidence changed the verdict: ")
+        elif reopened:
+            before = (f"approved by {reopened.by} on {reopened.at:%d %b %Y} with no board, so nothing "
+                      "was filed; judged again now: ")
         v = lead.verdict
         matches = result.jira_matches.get(sig) or (lead.draft.jira_matches if lead.draft else [])
         if lead.draft and matches:
             best = matches[0]
             rows.append(Row(sig, Status.likely_on_board, [m["key"] for m in matches],
                             before + f"probably already {best['key']} ({best['summary'][:60]}, "
-                            f"score {best['score']}): reject as duplicate unless it differs"))
+                            f"score {best['score']}): mark it duplicate unless it differs"))
         elif lead.draft:
             rows.append(Row(sig, Status.new, note=before + "new bug: draft ready, approve to file it"))
         elif v and v.category not in (Category.product_bug, Category.test_bug):
@@ -77,11 +83,11 @@ def classify(result) -> list[Row]:
 
 
 _CALL = {
-    Category.flaky: "flaky: re-runs disagree, so nothing to file. Reject as flaky to close it, "
+    Category.flaky: "flaky: re-runs disagree, so nothing to file. Mark it flaky to close it, "
                     "or fix the test's timing",
-    Category.environment: "environment problem, not a code bug: nothing to file. Reject as "
-                          "environment once the environment is fixed",
-    Category.test_data: "test data problem: nothing to file. Reject as test data, or fix the data",
+    Category.environment: "environment problem, not a code bug: nothing to file. Mark it "
+                          "as environment once the environment is fixed",
+    Category.test_data: "test data problem: nothing to file. Mark it as test data, or fix the data",
     Category.unknown: "not enough evidence to call it: open it, read the evidence, and decide",
 }
 

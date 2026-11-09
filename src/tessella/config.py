@@ -277,6 +277,9 @@ class Memory(BaseModel):
     # Reviewed failures most like this one, shown to the reader as calibration examples.
     examples: int = 2
     example_threshold: float = 0.75
+    # Ask the model again about a rejected failure that comes back with new evidence. It
+    # returns to the queue only if the verdict changes, and nothing is filed without a person.
+    recheck_rejected: bool = True
 
 
 class Cache(BaseModel):
@@ -334,6 +337,9 @@ class Mcp(BaseModel):
 
 class Storage(BaseModel):
     path: str = ".tessella/tessella.sqlite"
+    # Decisions as a small file you commit, so CI and teammates know them. Failure ids,
+    # decisions and ticket keys only, never logs. Relative to inputs.repo; empty turns it off.
+    decisions_file: str = "tessella-decisions.jsonl"
 
 
 class Settings(BaseModel):

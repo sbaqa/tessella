@@ -153,6 +153,21 @@ runs:
         path: ${{ inputs.working-directory }}/tessella-report.html
         archive: false
 
+    # What `tessella review` fetches. The cache above is CI's own memory and cannot be downloaded.
+    - name: Publish the results for review
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CONFIG: ${{ inputs.config }}
+      run: '"$RUNNER_TEMP/tessella/bin/tessella" snapshot .tessella/ci-export --config "$CONFIG"'
+    - if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: tessella-db
+        path: ${{ inputs.working-directory }}/.tessella/ci-export
+        include-hidden-files: true
+
     - name: Send the findings
       if: always()
       shell: bash

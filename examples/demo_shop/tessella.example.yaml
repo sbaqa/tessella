@@ -66,6 +66,7 @@ redact: ["Authorization", "Cookie", "password", "token"]
 
 storage:
   path: .tessella/tessella.sqlite
+  # decisions_file: tessella-decisions.jsonl   # commit it, so CI knows your decisions
 
 # The fixer agent proposes checked fixes for product bugs. Uncomment to turn it on, and add
 # `fixer: {provider: ollama_chat, name: "qwen3.5:4b", base_url: "http://127.0.0.1:11435"}`

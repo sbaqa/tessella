@@ -9,6 +9,7 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from html import escape
+from urllib.parse import quote
 
 from tessella.config import Email
 from tessella.net import is_allowed
@@ -33,12 +34,20 @@ def subject(d: dict, ctx: dict) -> str:
     return " ".join(f"[Tessella] {where + ': ' if where else ''}{found}".split())
 
 
+def review_url(row: dict, run: str | None, queue: str | None) -> str | None:
+    """Where a failure's Review button goes: a team's queue, or the queue on this laptop."""
+    if not row.get("open") or not (run or queue):
+        return None
+    base = (queue or "http://127.0.0.1:8484").rstrip("/")
+    return f"{base}/review?run={quote(run or '', safe='')}&case={quote(row['case_id'], safe='')}"
+
+
 def _short(text: str, limit: int = 400) -> str:
     line = " ".join((text or "").split())
     return line if len(line) <= limit else line[:limit - 1] + "…"
 
 
-def text_body(d: dict, ctx: dict, links: list[tuple[str, str]]) -> str:
+def text_body(d: dict, ctx: dict, links: list[tuple[str, str]], run: str | None = None) -> str:
     """The plain-text part, for mail clients that do not show HTML."""
     lines = [d["headline"] or "Tessella run summary", ""]
     where = [v for v in (ctx.get("repo"), ctx.get("change"), ctx.get("branch"), ctx.get("commit")) if v]
@@ -48,6 +57,8 @@ def text_body(d: dict, ctx: dict, links: list[tuple[str, str]]) -> str:
         lines += [d["note"], ""]
     if links:
         lines += ["REPORTS", *[f"  {name}: {url}" for name, url in links], ""]
+    if run and any(r.get("open") for r in d["rows"]):
+        lines += ["REVIEW ON YOUR MACHINE", f"  tessella review {run}", ""]
     if d["rows"]:
         lines.append("FAILURES")
     for r in d["rows"]:
@@ -69,7 +80,7 @@ def _field(name: str, value: str) -> str:
             f'color:#121920">{escape(_short(value))}</td></tr>')
 
 
-def _failure(r: dict) -> str:
+def _failure(r: dict, review: str | None) -> str:
     hue = _HUE.get(r["category"], "#7d8791")
     label = _LABEL.get(r["category"], r["verdict"]) if r["category"] not in ("none", "filed") else r["verdict"]
     tests = len(r["tests"])
@@ -84,6 +95,7 @@ def _failure(r: dict) -> str:
 <div style="font-size:12px;font-weight:700;color:{hue}">{escape(label)}{count}</div>
 <div style="font-size:15px;font-weight:600;color:#121920;padding:2px 0 8px;word-break:break-word">{escape(_short(r['title'], 140))}</div>
 <table role="presentation" cellpadding="0" cellspacing="0">{fields}</table>
+{_button("Review this failure", review, True) if review else ""}
 </td></tr></table></td></tr>"""
 
 
@@ -94,7 +106,7 @@ def _button(name: str, url: str, first: bool) -> str:
             f'font-weight:600;text-decoration:none">{escape(name)}</a>')
 
 
-def html_body(d: dict, ctx: dict, links: list[tuple[str, str]]) -> str:
+def html_body(d: dict, ctx: dict, links: list[tuple[str, str]], run: str | None = None) -> str:
     where = " &middot; ".join(escape(v) for v in (ctx.get("repo"), ctx.get("change"), ctx.get("branch"), ctx.get("commit")) if v)
     tiles = "".join(
         f'<td style="padding:0 16px 0 0;font-size:13px;color:#46525d"><b style="font-size:20px;'
@@ -104,7 +116,13 @@ def html_body(d: dict, ctx: dict, links: list[tuple[str, str]]) -> str:
     buttons = "".join(_button(n, u, i == 0) for i, (n, u) in enumerate(links))
     reports = (f'<h2 style="margin:18px 0 8px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;'
                f'color:#6b7680">Reports</h2><div>{buttons}</div>') if links else ""
-    failures = "".join(_failure(r) for r in d["rows"])
+    failures = "".join(_failure(r, review_url(r, run, d.get("queue_url"))) for r in d["rows"])
+    decide = (f'<h2 style="margin:18px 0 8px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;'
+              f'color:#6b7680">Review on your machine</h2><p style="margin:0 0 6px;font-size:13px;color:#46525d">'
+              f'Run this once, then the Review buttons below open each failure.</p>'
+              f'<code style="display:block;padding:9px 11px;background:#eef1f4;border-radius:6px;font-size:12px;'
+              f'color:#121920;word-break:break-all">tessella review {escape(run)}</code>'
+              if run and not d.get("queue_url") and any(r.get("open") for r in d["rows"]) else "")
     title = ('<h2 style="margin:12px 0 8px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;'
              'color:#6b7680">Failures</h2>') if failures else ""
     more = (f'<p style="margin:0 0 12px;font-size:13px;color:#6b7680">And {d["more"]} more failures: '
@@ -117,7 +135,7 @@ def html_body(d: dict, ctx: dict, links: list[tuple[str, str]]) -> str:
 <div style="font-size:12px;color:#6b7680;padding:2px 0 12px;word-break:break-word">{where}</div>
 <h1 style="margin:0 0 14px;font-size:18px;line-height:1.35;font-weight:650;color:#121920">{escape(d['headline'] or 'Run finished')}</h1>
 {note}<table role="presentation" cellpadding="0" cellspacing="0"><tr>{tiles}</tr></table>
-{reports}
+{reports}{decide}
 </td></tr>
 <tr><td style="padding:6px 0 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
 <tr><td>{title}</td></tr>{failures}<tr><td>{more}</td></tr></table></td></tr>
