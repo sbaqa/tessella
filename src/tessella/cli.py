@@ -259,7 +259,8 @@ def ci(reports: list[str] = typer.Argument(None), cfg: Optional[Path] = typer.Op
        no_rerun: bool = typer.Option(False, "--no-rerun", help="Use artifacts only (fast)."),
        no_model: bool = typer.Option(False, "--no-model", help="Collect and cluster only, for a runner with no model."),
        minutes: Optional[float] = typer.Option(None, "--minutes", help="Stop asking the model after this long (default: ci.max_minutes); the rest are reported as not judged."),
-       digest: Optional[Path] = typer.Option(None, "--digest", help="Also save the findings here, for tessella notify after the reports are uploaded.")):
+       digest: Optional[Path] = typer.Option(None, "--digest", help="Also save the findings here, for tessella notify after the reports are uploaded."),
+       model_failed: bool = typer.Option(False, "--model-failed", help="With --no-model: say the model could not be installed, rather than that this runner has none.")):
     """Run triage (and later probe) in CI, print one summary and optionally comment it on the PR. Always exits 0."""
     from tessella.integrations import ci_comment
     from tessella.pipeline import triage as run
@@ -268,13 +269,15 @@ def ci(reports: list[str] = typer.Argument(None), cfg: Optional[Path] = typer.Op
         s = _settings(cfg, reports, models=not no_model)
         result = run(s, rerun=not no_rerun, use_model=not no_model, ask_board=True,
                      minutes=minutes if minutes is not None else s.ci.max_minutes)
-        body = ci_comment.summary(result.cases, queue_url or s.ci.queue_url, result,
-                                  ci_comment.run_url())
+        found = ci_comment.digest(result.cases, queue_url or s.ci.queue_url, result)
+        if model_failed and result.cases:
+            found["note"] = ("The model could not be installed on this runner, so failures are "
+                             "grouped but not judged. The next run tries again.")
+        body = ci_comment.markdown(found, ci_comment.run_url())
         console.print(body)
         if digest:
             digest.parent.mkdir(parents=True, exist_ok=True)
-            digest.write_text(json.dumps(ci_comment.digest(result.cases, queue_url or s.ci.queue_url, result)),
-                              encoding="utf-8")
+            digest.write_text(json.dumps(found), encoding="utf-8")
         if comment if comment is not None else s.ci.comment:
             _post_ci_comment(s, body)
     except Exception as exc:  # CI must never fail the build because of Tessella

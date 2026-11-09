@@ -80,13 +80,28 @@ runs:
         key: tessella-db-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: tessella-db-
 
-    # One download per config: the model is cached between runs.
+    # One download per set of models, whatever else changes in the config.
+    - name: Find the models
+      id: models
+      if: inputs.use-model == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CONFIG: ${{ inputs.config }}
+      run: |
+        "$RUNNER_TEMP/tessella/bin/python" - "$CONFIG" >> "$GITHUB_OUTPUT" <<'PY'
+        import hashlib, sys
+        from tessella import config
+        s = config.load(sys.argv[1])
+        names = {m.name for m in map(s.models.get, ("reader", "vision", "fixer", "embedder")) if m}
+        print("key=" + hashlib.sha256(" ".join(sorted(names)).encode()).hexdigest()[:16])
+        PY
     - name: Restore the model
       if: inputs.use-model == 'true'
       uses: actions/cache@v4
       with:
         path: ${{ inputs.working-directory }}/.tessella/models
-        key: tessella-models-${{ runner.os }}-${{ hashFiles(format('{0}/{1}', inputs.working-directory, inputs.config)) }}
+        key: tessella-models-${{ runner.os }}-${{ steps.models.outputs.key }}
     - name: Install the model
       id: model
       if: inputs.use-model == 'true'
@@ -97,7 +112,10 @@ runs:
         OLLAMA_VERSION: ${{ inputs.ollama-version }}
         CONFIG: ${{ inputs.config }}
       run: |
-        command -v ollama >/dev/null || curl -fsSL https://ollama.com/install.sh | sh
+        for wait in 5 20 45; do  # a download cut off half way is common, and worth retrying
+          command -v ollama >/dev/null && break
+          curl -fsSL https://ollama.com/install.sh | sh || sleep "$wait"
+        done
         sudo systemctl stop ollama 2>/dev/null || true  # Tessella runs its own server
         "$RUNNER_TEMP/tessella/bin/tessella" models pull --config "$CONFIG"
 
@@ -111,10 +129,12 @@ runs:
         MINUTES: ${{ inputs.minutes }}
         RERUN: ${{ inputs.rerun }}
         HAS_MODEL: ${{ steps.model.outcome == 'success' }}
+        WANTS_MODEL: ${{ inputs.use-model }}
       run: |
         args=(ci --config "$CONFIG" --minutes "$MINUTES" --no-comment --digest .tessella/ci-digest.json)
         [ "$RERUN" = "true" ] || args+=(--no-rerun)
         [ "$HAS_MODEL" = "true" ] || args+=(--no-model)
+        [ "$HAS_MODEL" != "true" ] && [ "$WANTS_MODEL" = "true" ] && args+=(--model-failed)
         read -ra reports <<< "$REPORTS"
         "$RUNNER_TEMP/tessella/bin/tessella" "${args[@]}" "${reports[@]}"
 

@@ -274,3 +274,19 @@ def test_notify_never_fails_and_writes_the_ci_summary_page(tmp_path, monkeypatch
     assert "[Tessella report](https://x/1)" in text and "Empty" not in text
     missing = CliRunner().invoke(cli.app, ["notify", str(tmp_path / "none.json")])
     assert missing.exit_code == 0 and "Tessella error" in missing.output
+
+
+def test_a_failed_model_install_is_not_reported_as_no_model(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from tessella import cli
+
+    (tmp_path / "junit.xml").write_text(
+        '<testsuite tests="1" failures="1"><testcase classname="t" name="a">'
+        '<failure message="boom">boom</failure></testcase></testsuite>')
+    monkeypatch.chdir(tmp_path)
+    r = CliRunner().invoke(cli.app, ["ci", "--no-model", "--no-rerun", "--model-failed", "--digest", "d.json", "junit.xml"])
+    assert r.exit_code == 0
+    note = json.loads((tmp_path / "d.json").read_text())["note"]
+    assert note.startswith("The model could not be installed")
+    assert "Add a model" not in ci_comment.markdown(json.loads((tmp_path / "d.json").read_text()))
