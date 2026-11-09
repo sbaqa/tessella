@@ -3,6 +3,8 @@ eval, models, reindex, export-dataset."""
 
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -256,7 +258,8 @@ def ci(reports: list[str] = typer.Argument(None), cfg: Optional[Path] = typer.Op
        queue_url: Optional[str] = typer.Option(None, "--queue-url", help="Review queue link for the comment (default: ci.queue_url)."),
        no_rerun: bool = typer.Option(False, "--no-rerun", help="Use artifacts only (fast)."),
        no_model: bool = typer.Option(False, "--no-model", help="Collect and cluster only, for a runner with no model."),
-       minutes: Optional[float] = typer.Option(None, "--minutes", help="Stop asking the model after this long (default: ci.max_minutes); the rest are reported as not judged.")):
+       minutes: Optional[float] = typer.Option(None, "--minutes", help="Stop asking the model after this long (default: ci.max_minutes); the rest are reported as not judged."),
+       digest: Optional[Path] = typer.Option(None, "--digest", help="Also save the findings here, for tessella notify after the reports are uploaded.")):
     """Run triage (and later probe) in CI, print one summary and optionally comment it on the PR. Always exits 0."""
     from tessella.integrations import ci_comment
     from tessella.pipeline import triage as run
@@ -268,12 +271,77 @@ def ci(reports: list[str] = typer.Argument(None), cfg: Optional[Path] = typer.Op
         body = ci_comment.summary(result.cases, queue_url or s.ci.queue_url, result,
                                   ci_comment.run_url())
         console.print(body)
+        if digest:
+            digest.parent.mkdir(parents=True, exist_ok=True)
+            digest.write_text(json.dumps(ci_comment.digest(result.cases, queue_url or s.ci.queue_url, result)),
+                              encoding="utf-8")
         if comment if comment is not None else s.ci.comment:
             _post_ci_comment(s, body)
     except Exception as exc:  # CI must never fail the build because of Tessella
         console.print(f"[red]Tessella error:[/] {exc}")
     _offline_verdict(fail=False)
     raise typer.Exit(0)
+
+
+@app.command()
+def notify(digest: Path = typer.Argument(..., help="The file tessella ci --digest wrote."),
+           cfg: Optional[Path] = typer.Option(None, "--config", "-c"),
+           link: list[str] = typer.Option([], "--link", help="A report to link, as NAME=URL. Repeat it."),
+           comment: bool = typer.Option(False, "--comment", help="Post the summary on the pull/merge request."),
+           email: bool = typer.Option(False, "--email", help="Email the summary to ci.email.to."),
+           email_to: Optional[str] = typer.Option(None, "--email-to", help="Recipients, comma separated (default: ci.email.to)."),
+           smtp_host: Optional[str] = typer.Option(None, "--smtp-host", help="SMTP server (default: ci.email.host)."),
+           smtp_port: Optional[int] = typer.Option(None, "--smtp-port"),
+           email_from: Optional[str] = typer.Option(None, "--email-from")):
+    """Send a CI run's findings, with links to its reports: PR comment, email, CI summary page. Always exits 0."""
+    from tessella.integrations import ci_comment
+
+    try:
+        s = config.load(cfg)
+        d = json.loads(digest.read_text(encoding="utf-8"))
+        links = [tuple(x.split("=", 1)) for x in link if "=" in x and x.split("=", 1)[1]]
+        ctx, run = ci_comment.context(), ci_comment.run_url()
+        all_links = [*links, *([("CI run", run)] if run else []),
+                     *([(ctx["change"], ctx["change_url"])] if ctx["change_url"] else [])]
+        body = ci_comment.markdown(d, run, links)
+        summary_page = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary_page:
+            with open(summary_page, "a", encoding="utf-8") as fh:
+                fh.write(body + "\n")
+        if comment:
+            _post_ci_comment(s, body)
+        if email:
+            mail = s.ci.email
+            mail.to = [a.strip() for a in email_to.split(",") if a.strip()] if email_to else mail.to
+            mail.host, mail.sender = smtp_host or mail.host, email_from or mail.sender
+            mail.port = smtp_port or mail.port
+            _send_email(s, d, ctx, all_links)
+    except Exception as exc:  # CI must never fail the build because of Tessella
+        console.print(f"[red]Tessella error:[/] {exc}")
+    raise typer.Exit(0)
+
+
+def _send_email(s: config.Settings, d: dict, ctx: dict, links: list) -> None:
+    """Email the summary, or say plainly why not. Never raises."""
+    from tessella import egress
+    from tessella.integrations import ci_email
+
+    if egress.active():
+        console.print("[yellow]Not emailing:[/] offline mode.")
+        return
+    if not (s.ci.email.to and s.ci.email.host):
+        console.print("[yellow]Not emailing:[/] set the recipients and the SMTP host.")
+        return
+    try:
+        ci_email.send(s.ci.email, ci_email.subject(d, ctx), ci_email.text_body(d, ctx, links),
+                      ci_email.html_body(d, ctx, links), s.network.allow)
+        console.print(f"Emailed {_count_of(s.ci.email.to)}.")
+    except Exception as exc:  # noqa: BLE001 - an email is never worth a failed build
+        console.print(f"[yellow]Could not email:[/] {exc}")
+
+
+def _count_of(people: list[str]) -> str:
+    return f"{len(people)} recipient{'' if len(people) == 1 else 's'}"
 
 
 def _post_ci_comment(s: config.Settings, body: str) -> None:

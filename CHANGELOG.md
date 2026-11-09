@@ -7,6 +7,8 @@
 - A GitHub Action (`uses: sbaqa/tessella@master`) that runs a real local model on the runner, triages the failures, comments on the pull request and uploads the report.
 - `tessella ci --minutes`: a time limit for the model, so a slow runner reports what it did not reach.
 
+- `tessella notify`: a structured email, the PR comment and the CI Summary page, each with direct links to the reports stored on the CI run.
+
 ### Changed
 - The CI comment is useful with no model: failures are grouped with their kind, how often each failed before, which ones the board already has, and a link to the run.
 

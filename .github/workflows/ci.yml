@@ -35,18 +35,28 @@ jobs:
         with: { node-version: "22" }
       - run: npm install -g allure-commandline
       - working-directory: examples/demo_shop
+        env:
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
         run: |
           pip install -r requirements.txt
           playwright install --with-deps chromium
           cp tessella.example.yaml tessella.yaml
-          sed -i 's/allow: \["127/allow: ["api.github.com", "127/' tessella.yaml
+          sed -i "s/allow: \[\"127/allow: [\"api.github.com\", \"${SMTP_HOST:-api.github.com}\", \"127/" tessella.yaml
       - working-directory: examples/demo_shop
-        run: bash run_suite.sh -q
+        run: |
+          bash run_suite.sh -q
+          allure generate reports/allure-results -o reports/allure-single --single-file --clean
+          cp reports/allure-single/index.html reports/allure-report.html
+      - id: allure
+        uses: actions/upload-artifact@v7
+        with:
+          path: examples/demo_shop/reports/allure-report.html
+          archive: false
       - uses: ./
         with:
           working-directory: examples/demo_shop
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: allure-report
-          path: examples/demo_shop/reports/allure-report
+          links: Allure report=${{ steps.allure.outputs.artifact-url }}
+          email-to: ${{ vars.TESSELLA_EMAIL_TO }}
+          smtp-host: ${{ vars.SMTP_HOST }}
+          smtp-username: ${{ secrets.SMTP_USERNAME }}
+          smtp-password: ${{ secrets.SMTP_PASSWORD }}

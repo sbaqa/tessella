@@ -56,35 +56,12 @@ def _seen(history: tuple[int, int] | None) -> str:
     return f"{seen} of last {runs} runs" if seen else "new"
 
 
-def _detail(members: list[Case]) -> list[str]:
-    """A folded block for a drafted bug or a failure that hit several tests."""
-    lead, draft = members[0], members[0].draft
-    if not draft and len(members) == 1:
-        return []
-    out = [f"<details><summary>{_one_line(lead.title, 90)}</summary>", ""]
-    if draft:
-        out += [f"**Actual:** {_one_line(draft.actual_result, 300)}", "",
-                f"**Expected:** {_one_line(draft.expected_result, 300)}", "",
-                f"**Suggested fix:** {_one_line(draft.suggested_fix, 300)}", ""]
-        if draft.patch_status:
-            out += [f"**Checked fix:** {_one_line(draft.patch_status, 200)}", ""]
-    if len(members) > 1:
-        out += [f"**{len(members)} tests fail this way:**", ""]
-        out += [f"- {_one_line(c.title, 120)}" for c in members[:20]]
-        if len(members) > 20:
-            out.append(f"- and {len(members) - 20} more")
-        out.append("")
-    return [*out, "</details>", ""]
-
-
-def summary(cases: list[Case], queue_url: str | None = None, result=None,
-            run_link: str | None = None) -> str:
-    """The comment. With the triage `result`, it opens with what the run means for the board
-    (already filed, probably filed, new drafts) and gives each cluster its board status. With
-    no model on the runner it still groups the failures, names their kind, says which the
-    board already has, and how often each one failed before."""
-    counts = Counter(c.verdict.category if c.verdict else "not judged" for c in cases)
-    lines = [MARKER, "### Tessella run summary", ""]
+def digest(cases: list[Case], queue_url: str | None = None, result=None) -> dict:
+    """What the run found, as plain data: the comment and the email are both drawn from it,
+    and it can be saved so they can be sent after the reports are uploaded."""
+    out: dict = {"headline": None, "note": None, "queue_url": queue_url, "rows": [], "more": 0,
+                 "counts": dict(Counter(str(c.verdict.category) if c.verdict else "not judged"
+                                        for c in cases).most_common())}
     status, on_board = {}, set()
     if result is not None:
         from tessella import board
@@ -92,63 +69,125 @@ def summary(cases: list[Case], queue_url: str | None = None, result=None,
         rows = board.classify(result)
         status = {r.signature: r.note for r in rows}
         on_board = {r.signature for r in rows if r.status == board.Status.on_board}
-        lines += [f"**{board.headline(result, rows)}**", ""]
+        out["headline"] = board.headline(result, rows)
         if result.out_of_time:
-            lines += [f"_Time limit reached: {result.out_of_time} failure(s) were not judged._", ""]
+            out["note"] = f"Time limit reached: {result.out_of_time} failure(s) were not judged."
         elif not result.used_model and cases:
-            lines += [("_This runner has no model, so failures are grouped but not judged. "
-                       f"[Add a model to CI]({_HOW_TO_ADD_A_MODEL})._"), ""]
-    if not cases:
-        lines += ["No failures in the reports.", ""]
-    lines += [f"- **{cat}**: {n}" for cat, n in counts.most_common()]
+            out["note"] = "This runner has no model, so failures are grouped but not judged."
     clusters: dict[str, list[Case]] = {}
     for c in cases:
         clusters.setdefault(c.signature or c.id, []).append(c)
     history = getattr(result, "history", {}) if result is not None else {}
     checked = getattr(result, "board_checked", False)
-    if clusters:
-        head = "| Failure | Tests | Verdict | Suspected cause | Board |"
-        rule = "| --- | --- | --- | --- | --- |"
-        if history:
+    out["show_seen"] = any(runs for _, runs in history.values())
+    out["more"] = max(0, len(clusters) - _ROWS)
+    out["drafted"] = sum(1 for m in clusters.values() if m[0].draft and m[0].verdict
+                         and m[0].verdict.category in _ACTIONABLE)
+    for members in list(clusters.values())[:_ROWS]:
+        lead, v, d = members[0], members[0].verdict, members[0].draft
+        if lead.signature in on_board:
+            verdict, category = "already filed", "filed"
+        elif v:
+            verdict, category = f"{v.category} ({v.confidence:.0%})", str(v.category)
+        else:
+            verdict, category = f"{kind(lead.message)}, not judged", "none"
+        cause = v.root_cause if v else lead.message
+        if d and d.possible_duplicates:
+            cause += f" Possible duplicate of {', '.join(d.possible_duplicates)}."
+        board_note = status.get(lead.signature, "new draft" if d else "not filed")
+        if not v and result is not None and lead.signature not in on_board:
+            board_note = "no ticket for this failure yet" if checked else "board not checked"
+        out["rows"].append({
+            "title": lead.title, "tests": [c.title for c in members], "verdict": verdict,
+            "category": category, "cause": cause, "board": board_note,
+            "seen": _seen(history.get(lead.signature)),
+            "actual": d.actual_result if d else "", "expected": d.expected_result if d else "",
+            "fix": d.suggested_fix if d else "", "checked_fix": d.patch_status if d else ""})
+    return out
+
+
+def _detail(row: dict) -> list[str]:
+    """A folded block for a drafted bug or a failure that hit several tests."""
+    tests = row["tests"]
+    if not row["actual"] and len(tests) == 1:
+        return []
+    out = [f"<details><summary>{_one_line(row['title'], 90)}</summary>", ""]
+    if row["actual"]:
+        out += [f"**Actual:** {_one_line(row['actual'], 300)}", "",
+                f"**Expected:** {_one_line(row['expected'], 300)}", "",
+                f"**Suggested fix:** {_one_line(row['fix'], 300)}", ""]
+        if row["checked_fix"]:
+            out += [f"**Checked fix:** {_one_line(row['checked_fix'], 200)}", ""]
+    if len(tests) > 1:
+        out += [f"**{len(tests)} tests fail this way:**", ""]
+        out += [f"- {_one_line(t, 120)}" for t in tests[:20]]
+        if len(tests) > 20:
+            out.append(f"- and {len(tests) - 20} more")
+        out.append("")
+    return [*out, "</details>", ""]
+
+
+def markdown(d: dict, run_link: str | None = None, links: list[tuple[str, str]] | None = None) -> str:
+    """The digest as the comment GitHub or GitLab shows, and as the CI run's summary page."""
+    lines = [MARKER, "### Tessella run summary", ""]
+    if d["headline"]:
+        lines += [f"**{d['headline']}**", ""]
+    if d["note"]:
+        more = f" [Add a model to CI]({_HOW_TO_ADD_A_MODEL})." if "no model" in d["note"] else ""
+        lines += [f"_{d['note']}{more}_", ""]
+    reports = [*(links or []), *([("CI run", run_link)] if run_link else [])]
+    if reports:
+        lines += ["**Reports:** " + " · ".join(f"[{name}]({url})" for name, url in reports), ""]
+    if not d["rows"]:
+        lines += ["No failures in the reports.", ""]
+    lines += [f"- **{cat}**: {n}" for cat, n in d["counts"].items()]
+    if d["rows"]:
+        head, rule = "| Failure | Tests | Verdict | Suspected cause | Board |", "| --- | --- | --- | --- | --- |"
+        if d["show_seen"]:
             head, rule = head + " Seen before |", rule + " --- |"
         lines += ["", head, rule]
-        for members in list(clusters.values())[:_ROWS]:
-            lead = members[0]
-            v = lead.verdict
-            if lead.signature in on_board:
-                verdict = "already filed"
-            elif v:
-                verdict = f"{v.category} ({v.confidence:.0%})"
-            else:
-                verdict = f"{kind(lead.message)}, not judged"
-            cause = v.root_cause if v else lead.message
-            d = lead.draft
-            if d and d.possible_duplicates:
-                cause += f" Possible duplicate of {', '.join(d.possible_duplicates)}."
-            board_note = status.get(lead.signature, "new draft" if d else "not filed")
-            if not v and result is not None and lead.signature not in on_board:
-                board_note = "no ticket for this failure yet" if checked else "board not checked"
-            row = (f"| {_one_line(lead.title, 80)} | {len(members)} | {verdict} "
-                   f"| {_one_line(cause)} | {_one_line(board_note, 100)} |")
-            if history:
-                row += f" {_seen(history.get(lead.signature))} |"
-            lines.append(row)
-        if len(clusters) > _ROWS:
-            lines.append(f"\n_And {len(clusters) - _ROWS} more failures: see the full report._")
-        details = [line for members in list(clusters.values())[:_DETAILS] for line in _detail(members)]
+        for r in d["rows"]:
+            row = (f"| {_one_line(r['title'], 80)} | {len(r['tests'])} | {r['verdict']} "
+                   f"| {_one_line(r['cause'])} | {_one_line(r['board'], 100)} |")
+            lines.append(row + (f" {r['seen']} |" if d["show_seen"] else ""))
+        if d["more"]:
+            lines.append(f"\n_And {d['more']} more failures: see the full report._")
+        details = [line for r in d["rows"][:_DETAILS] for line in _detail(r)]
         if details:
             lines += ["", *details]
-    drafted = sum(1 for members in clusters.values()
-                  if members[0].draft and members[0].verdict
-                  and members[0].verdict.category in _ACTIONABLE)
-    if queue_url:
-        lines += ["", f"Drafts are waiting for review: {queue_url}"]
-    elif drafted:
-        lines += ["", f"{drafted} ticket draft(s) are waiting in the review queue (`tessella queue`)."]
-    if run_link:
-        lines += ["", f"Full report and test results: [this run]({run_link})"]
+    if d["queue_url"]:
+        lines += ["", f"Drafts are waiting for review: {d['queue_url']}"]
+    elif d["drafted"]:
+        lines += ["", f"{d['drafted']} ticket draft(s) are waiting in the review queue (`tessella queue`)."]
     lines += ["", "_Nothing is filed to Jira without SDET approval._"]
     return "\n".join(lines)
+
+
+def summary(cases: list[Case], queue_url: str | None = None, result=None,
+            run_link: str | None = None, links: list[tuple[str, str]] | None = None) -> str:
+    """The comment. With the triage `result`, it opens with what the run means for the board
+    (already filed, probably filed, new drafts) and gives each cluster its board status. With
+    no model on the runner it still groups the failures, names their kind, says which the
+    board already has, and how often each one failed before."""
+    return markdown(digest(cases, queue_url, result), run_link, links)
+
+
+def context(env: dict[str, str] | None = None) -> dict[str, str]:
+    """Which repository, pull request, branch and commit this CI run is for."""
+    env = dict(os.environ if env is None else env)
+    if env.get("GITHUB_ACTIONS") == "true":
+        server = env.get("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
+        repo, number = env.get("GITHUB_REPOSITORY", ""), _github_pr_number(env)
+        return {"repo": repo, "branch": env.get("GITHUB_HEAD_REF") or env.get("GITHUB_REF_NAME", ""),
+                "commit": env.get("GITHUB_SHA", "")[:7], "change": f"PR #{number}" if number else "",
+                "change_url": f"{server}/{repo}/pull/{number}" if number else ""}
+    if env.get("GITLAB_CI") == "true":
+        iid, url = env.get("CI_MERGE_REQUEST_IID"), env.get("CI_PROJECT_URL", "")
+        return {"repo": env.get("CI_PROJECT_PATH", ""),
+                "branch": env.get("CI_MERGE_REQUEST_SOURCE_BRANCH_NAME") or env.get("CI_COMMIT_REF_NAME", ""),
+                "commit": env.get("CI_COMMIT_SHORT_SHA", ""), "change": f"MR !{iid}" if iid else "",
+                "change_url": f"{url}/-/merge_requests/{iid}" if iid else ""}
+    return {"repo": "", "branch": "", "commit": "", "change": "", "change_url": ""}
 
 
 def run_url(env: dict[str, str] | None = None) -> str | None:

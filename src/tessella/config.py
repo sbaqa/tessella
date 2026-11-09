@@ -217,6 +217,27 @@ class Fix(BaseModel):
     suite_command: str | None = None
 
 
+class Email(BaseModel):
+    """Where `tessella notify --email` sends a CI run's summary. The SMTP host must be in
+    network.allow. The login comes from the env vars named here, never from this file."""
+
+    to: list[str] = Field(default_factory=list)
+    host: str | None = None
+    port: int = 587
+    tls: Literal["starttls", "ssl", "none"] = "starttls"
+    sender: str | None = None  # default: the login
+    username_env: str = "SMTP_USERNAME"
+    password_env: str = "SMTP_PASSWORD"
+
+    @property
+    def username(self) -> str | None:
+        return os.environ.get(self.username_env)
+
+    @property
+    def password(self) -> str | None:
+        return os.environ.get(self.password_env)
+
+
 class Ci(BaseModel):
     """`tessella ci`: a summary comment on the pull request (GitHub Actions) or merge request
     (GitLab CI) the job runs for, edited in place on each run. Off unless turned on here or
@@ -231,6 +252,7 @@ class Ci(BaseModel):
     # Stop asking the model after this many minutes; failures left over are reported as not
     # judged. A CPU runner is slow, and a CI job has a time limit. None: no limit.
     max_minutes: float | None = None
+    email: Email = Field(default_factory=Email)
 
 
 class OllamaLocal(BaseModel):

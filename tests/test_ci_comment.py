@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 import respx
 
 from tessella.integrations import ci_comment
@@ -141,7 +142,7 @@ def test_comment_history_time_limit_and_run_link():
                               run_link="https://ci/run/1")
     assert "Seen before" in body and "3 of last 5 runs" in body and "| new |" in body
     assert "Time limit reached: 2 failure(s)" in body and "no model" not in body
-    assert "[this run](https://ci/run/1)" in body
+    assert "[CI run](https://ci/run/1)" in body
 
 
 def test_comment_drafted_bug_folds_its_details_and_escapes_html():
@@ -167,3 +168,109 @@ def test_run_url():
         "https://github.com/o/r/actions/runs/9"
     assert ci_comment.run_url({"GITLAB_CI": "true", "CI_PIPELINE_URL": "https://g/p/1"}) == "https://g/p/1"
     assert ci_comment.run_url({}) is None
+
+
+def _digest():
+    bug = _failure("s1", "test_total", "AssertionError")
+    bug.verdict = Verdict(category=Category.product_bug, confidence=0.9, root_cause="<b>rounding</b> in cart")
+    from tessella.models import Draft, DraftKind
+
+    bug.draft = Draft(kind=DraftKind.ticket, title="t", body="b", actual_result="1", expected_result="2",
+                      suggested_fix="round half up")
+    other = _failure("s2", "test_login", "Timeout 3000ms exceeded.")
+    return ci_comment.digest([bug, other], result=_Result([bug, other], used_model=False))
+
+
+CTX = {"repo": "o/r", "change": "PR #2", "change_url": "https://github.com/o/r/pull/2", "branch": "b", "commit": "abc1234"}
+LINKS = [("Tessella report", "https://github.com/o/r/actions/runs/1/artifacts/2"), ("CI run", "https://github.com/o/r/actions/runs/1")]
+
+
+def test_reports_section_links_directly_to_the_artifacts():
+    body = ci_comment.markdown(_digest(), "https://ci/run", [("Tessella report", "https://x/artifacts/2"), ("Allure report", "https://x/artifacts/3")])
+    assert "**Reports:** [Tessella report](https://x/artifacts/2) · [Allure report](https://x/artifacts/3) · [CI run](https://ci/run)" in body
+    assert body.index("**Reports:**") < body.index("| Failure |")
+
+
+def test_digest_survives_a_file():
+    d = _digest()
+    assert json.loads(json.dumps(d)) == d
+
+
+def test_email_is_structured_and_escapes_everything():
+    from tessella.integrations import ci_email
+
+    d = _digest()
+    html = ci_email.html_body(d, CTX, LINKS)
+    assert "<b>rounding" not in html and "&lt;b&gt;rounding" in html
+    assert 'href="https://github.com/o/r/actions/runs/1/artifacts/2"' in html and ">Tessella report</a>" in html
+    assert "Product bug" in html and "Suggested fix" in html and "round half up" in html and "o/r" in html
+    text = ci_email.text_body(d, CTX, LINKS)
+    assert "Tessella report: https://github.com/o/r/actions/runs/1/artifacts/2" in text and "REPORTS" in text
+    subject = ci_email.subject(d, CTX)
+    assert subject.startswith("[Tessella] o/r PR #2: 2 failed tests:") and "1 product bug" in subject
+
+
+def test_email_never_leaves_for_a_host_outside_the_allowlist(monkeypatch):
+    import smtplib
+
+    from tessella.config import Email
+    from tessella.integrations import ci_email
+
+    monkeypatch.setattr(smtplib, "SMTP", lambda *a, **k: pytest.fail("connected"))
+    with pytest.raises(PermissionError, match="network.allow"):
+        ci_email.send(Email(to=["a@b.c"], host="smtp.evil.test"), "s", "t", "<p>h</p>", ["smtp.gmail.com"])
+
+
+def test_email_logs_in_from_the_environment_and_sends_both_parts(monkeypatch):
+    import smtplib
+
+    from tessella.config import Email
+    from tessella.integrations import ci_email
+
+    seen = {}
+
+    class Fake:
+        def __init__(self, host, port, timeout):
+            seen["at"] = (host, port)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def starttls(self, context):
+            seen["tls"] = True
+
+        def login(self, user, password):
+            seen["login"] = (user, password)
+
+        def send_message(self, message):
+            seen["message"] = message
+
+    monkeypatch.setattr(smtplib, "SMTP", Fake)
+    monkeypatch.setenv("SMTP_USERNAME", "me@x.y")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret")
+    ci_email.send(Email(to=["a@b.c", "d@e.f"], host="smtp.x.y"), "subject", "plain", "<p>rich</p>", ["smtp.x.y"])
+    m = seen["message"]
+    assert seen["at"] == ("smtp.x.y", 587) and seen["tls"] and seen["login"] == ("me@x.y", "secret")
+    assert m["To"] == "a@b.c, d@e.f" and m["From"] == "me@x.y" and m["Subject"] == "subject"
+    assert {p.get_content_type() for p in m.iter_parts()} == {"text/plain", "text/html"}
+
+
+def test_notify_never_fails_and_writes_the_ci_summary_page(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from tessella import cli
+
+    digest = tmp_path / "d.json"
+    digest.write_text(json.dumps(_digest()))
+    page = tmp_path / "summary.md"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(page))
+    r = CliRunner().invoke(cli.app, ["notify", str(digest), "--link", "Tessella report=https://x/1", "--link", "Empty=", "--email"])
+    assert r.exit_code == 0 and "Not emailing" in r.output
+    text = page.read_text()
+    assert "[Tessella report](https://x/1)" in text and "Empty" not in text
+    missing = CliRunner().invoke(cli.app, ["notify", str(tmp_path / "none.json")])
+    assert missing.exit_code == 0 and "Tessella error" in missing.output

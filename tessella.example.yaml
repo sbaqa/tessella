@@ -119,6 +119,14 @@ ci:
   comment: false                 # or `tessella ci --comment`
   # token_env: GITHUB_TOKEN      # default GITHUB_TOKEN on GitHub, GITLAB_TOKEN on GitLab
   # queue_url: https://tessella.lan:8484
+  # max_minutes: 25              # stop asking the model after this long
+  # email:                       # tessella notify --email: findings and report links
+  #   to: ["you@example.com"]
+  #   host: smtp.gmail.com       # add it to network.allow
+  #   port: 587
+  #   tls: starttls              # or ssl, none
+  #   username_env: SMTP_USERNAME  # NAMES of env vars, never the values
+  #   password_env: SMTP_PASSWORD
 
 network:
   # Everything else is blocked. A cloud fixer only works once its host is listed here,

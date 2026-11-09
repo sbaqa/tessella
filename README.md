@@ -1007,7 +1007,8 @@ and `models.vision` yourself.
 | `tessella init` | Interactive setup: write `tessella.yaml`, install the extras it needs, start a project-scoped Ollama server and pull models, if you chose local models. Option: `--config` |
 | `tessella triage [REPORTS...]` | Collect, cluster, investigate and judge failures; fill the review queue. Options: `--config`, `--no-rerun` (artifacts only, fast), `--no-model` (collect and cluster only), `--json` (each cluster with its earlier decision: `decision`, `decided_at`, `decided_by`, `ticket_key`, `ticket_url`) |
 | `tessella probe [TRACES...]` | Link IDs in recorded flows and plan mutations; the plan is stored and shown in the report. Option: `--flow NAME`. It sends nothing; for findings, pass Schemathesis or ZAP reports to `tessella triage` |
-| `tessella ci [REPORTS...]` | Triage inside a pipeline, print one summary, always exit 0 so Tessella never fails your build. Options: `--comment` (post the summary on the PR/MR, see [Running in CI](#running-in-ci)), `--queue-url`, `--no-rerun`, `--no-model`, `--minutes` |
+| `tessella ci [REPORTS...]` | Triage inside a pipeline, print one summary, always exit 0 so Tessella never fails your build. Options: `--comment` (post the summary on the PR/MR, see [Running in CI](#running-in-ci)), `--queue-url`, `--no-rerun`, `--no-model`, `--minutes`, `--digest` |
+| `tessella notify DIGEST` | Send a CI run's findings with links to its reports: PR/MR comment, email, CI Summary page. Options: `--link NAME=URL`, `--comment`, `--email`, `--email-to`, `--smtp-host`, `--smtp-port`, `--email-from` |
 | `tessella queue` | Open the review queue on `http://localhost:8484`; the live dashboard is at `/report`. Options: `--port`, `--host` (beyond loopback needs `team.reviewers`), `--tls-cert`/`--tls-key` for HTTPS |
 | `tessella report` | Write an offline HTML dashboard to `.tessella/report.html`: failures as tiles, the funnel to tickets, reviewer agreement, evidence quality, model calls and run history. Options: `--out PATH`, `--open`, `--view full\|management`, `--config` |
 | `tessella calibrate [SIGNATURE]` | Time a manual investigation on a raw failure (no verdict shown) so the time-saved figure rests on your team's own numbers. Options: `--minutes N` to import a time you already know, `--no-ticket` if it did not end in a ticket, `--note`, `--list`, `--config` |
@@ -1176,6 +1177,28 @@ Tessella remembers, re-runs each failing test, judges the failures, comments on 
 request and uploads the report. Your `tessella.yaml` needs `api.github.com` in `network.allow`
 for the comment. Inputs: `reports`, `config`, `working-directory`, `use-model`, `rerun`,
 `comment`, `minutes`, `ollama-version`.
+
+The comment, the run's Summary page and the email all carry a **Reports** section with direct
+links. The action uploads the report as one unzipped file, so its link opens the HTML page;
+pass your own uploads with `links`, one `NAME=URL` per line, and set `email-to` to get the email:
+
+```yaml
+- id: allure                        # one file: allure generate --single-file
+  uses: actions/upload-artifact@v7
+  with: { path: allure-report.html, archive: false }
+- uses: sbaqa/tessella@master
+  if: failure()
+  with:
+    links: Allure report=${{ steps.allure.outputs.artifact-url }}
+    email-to: ${{ vars.TESSELLA_EMAIL_TO }}
+    smtp-host: smtp.gmail.com       # also in network.allow
+    smtp-username: ${{ secrets.SMTP_USERNAME }}
+    smtp-password: ${{ secrets.SMTP_PASSWORD }}
+```
+
+Outside the action: `tessella ci --no-comment --digest d.json`, upload your reports, then
+`tessella notify d.json --link "Report=URL" --comment --email`. The links need a GitHub sign-in
+with access to the repository, and they last as long as the artifact does (90 days by default).
 
 A standard runner has no GPU, so the model runs on 4 CPU cores. `minutes` (default 25) stops
 asking the model after that long and reports what is left as not judged. With `use-model:

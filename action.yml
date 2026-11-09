@@ -29,6 +29,32 @@ inputs:
   ollama-version:
     description: Ollama release to install on the runner.
     default: "0.32.4"
+  links:
+    description: More reports to link, one NAME=URL per line (for example the artifact-url of your own upload).
+    default: ""
+  email-to:
+    description: Email the summary to these addresses, comma separated. Empty sends no email.
+    default: ""
+  email-from:
+    description: Sender address. Default is the SMTP login.
+    default: ""
+  smtp-host:
+    description: SMTP server. It must be in network.allow.
+    default: ""
+  smtp-port:
+    description: SMTP port.
+    default: "587"
+  smtp-username:
+    description: SMTP login. Pass it from a secret.
+    default: ""
+  smtp-password:
+    description: SMTP password. Pass it from a secret.
+    default: ""
+
+outputs:
+  report-url:
+    description: Direct link to the Tessella report on this run.
+    value: ${{ steps.report.outputs.artifact-url }}
 
 runs:
   using: composite
@@ -75,20 +101,18 @@ runs:
         sudo systemctl stop ollama 2>/dev/null || true  # Tessella runs its own server
         "$RUNNER_TEMP/tessella/bin/tessella" models pull --config "$CONFIG"
 
+    # The findings are sent after the reports are uploaded, so they can link to them.
     - name: Triage the failures
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
-        GITHUB_TOKEN: ${{ github.token }}
         REPORTS: ${{ inputs.reports }}
         CONFIG: ${{ inputs.config }}
         MINUTES: ${{ inputs.minutes }}
-        COMMENT: ${{ inputs.comment }}
         RERUN: ${{ inputs.rerun }}
         HAS_MODEL: ${{ steps.model.outcome == 'success' }}
       run: |
-        args=(ci --config "$CONFIG" --minutes "$MINUTES")
-        [ "$COMMENT" = "true" ] && args+=(--comment)
+        args=(ci --config "$CONFIG" --minutes "$MINUTES" --no-comment --digest .tessella/ci-digest.json)
         [ "$RERUN" = "true" ] || args+=(--no-rerun)
         [ "$HAS_MODEL" = "true" ] || args+=(--no-model)
         read -ra reports <<< "$REPORTS"
@@ -101,8 +125,37 @@ runs:
       env:
         CONFIG: ${{ inputs.config }}
       run: '"$RUNNER_TEMP/tessella/bin/tessella" report --config "$CONFIG" -o tessella-report.html'
-    - uses: actions/upload-artifact@v4
+    # A single unzipped file, so its link opens the report instead of downloading a zip.
+    - id: report
       if: always()
+      uses: actions/upload-artifact@v7
       with:
-        name: tessella-report
         path: ${{ inputs.working-directory }}/tessella-report.html
+        archive: false
+
+    - name: Send the findings
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        CONFIG: ${{ inputs.config }}
+        COMMENT: ${{ inputs.comment }}
+        REPORT_URL: ${{ steps.report.outputs.artifact-url }}
+        LINKS: ${{ inputs.links }}
+        EMAIL_TO: ${{ inputs.email-to }}
+        EMAIL_FROM: ${{ inputs.email-from }}
+        SMTP_HOST: ${{ inputs.smtp-host }}
+        SMTP_PORT: ${{ inputs.smtp-port }}
+        SMTP_USERNAME: ${{ inputs.smtp-username }}
+        SMTP_PASSWORD: ${{ inputs.smtp-password }}
+      run: |
+        [ -f .tessella/ci-digest.json ] || exit 0
+        args=(notify .tessella/ci-digest.json --config "$CONFIG" --link "Tessella report=$REPORT_URL")
+        while IFS= read -r line; do [ -n "$line" ] && args+=(--link "$line"); done <<< "$LINKS"
+        [ "$COMMENT" = "true" ] && args+=(--comment)
+        if [ -n "$EMAIL_TO" ]; then
+          args+=(--email --email-to "$EMAIL_TO" --smtp-host "$SMTP_HOST" --smtp-port "$SMTP_PORT")
+          [ -n "$EMAIL_FROM" ] && args+=(--email-from "$EMAIL_FROM")
+        fi
+        "$RUNNER_TEMP/tessella/bin/tessella" "${args[@]}"
