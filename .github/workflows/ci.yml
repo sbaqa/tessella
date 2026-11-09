@@ -56,7 +56,7 @@ jobs:
         with:
           working-directory: examples/demo_shop
           links: Allure report=${{ steps.allure.outputs.artifact-url }}
-          email-to: ${{ vars.TESSELLA_EMAIL_TO }}
+          email-to: ${{ secrets.TESSELLA_EMAIL_TO }}
           smtp-host: ${{ vars.SMTP_HOST }}
           smtp-username: ${{ secrets.SMTP_USERNAME }}
           smtp-password: ${{ secrets.SMTP_PASSWORD }}

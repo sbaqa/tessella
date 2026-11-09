@@ -1190,7 +1190,7 @@ pass your own uploads with `links`, one `NAME=URL` per line, and set `email-to` 
   if: failure()
   with:
     links: Allure report=${{ steps.allure.outputs.artifact-url }}
-    email-to: ${{ vars.TESSELLA_EMAIL_TO }}
+    email-to: ${{ secrets.TESSELLA_EMAIL_TO }}
     smtp-host: smtp.gmail.com       # also in network.allow
     smtp-username: ${{ secrets.SMTP_USERNAME }}
     smtp-password: ${{ secrets.SMTP_PASSWORD }}
