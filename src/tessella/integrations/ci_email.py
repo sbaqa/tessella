@@ -173,10 +173,12 @@ def send(cfg: Email, subject_line: str, text: str, html: str, allow: list[str]) 
     message.set_content(text)
     message.add_alternative(html, subtype="html")
     context = ssl.create_default_context()
+    # A fixed greeting name: looking up this machine's own name can stall for minutes, and
+    # the mail server has no need for it.
     if cfg.tls == "ssl":
-        client = smtplib.SMTP_SSL(cfg.host, cfg.port, timeout=30, context=context)
+        client = smtplib.SMTP_SSL(cfg.host, cfg.port, timeout=30, context=context, local_hostname="localhost")
     else:
-        client = smtplib.SMTP(cfg.host, cfg.port, timeout=30)
+        client = smtplib.SMTP(cfg.host, cfg.port, timeout=30, local_hostname="localhost")
     with client:
         if cfg.tls == "starttls":
             client.starttls(context=context)

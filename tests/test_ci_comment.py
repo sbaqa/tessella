@@ -230,7 +230,7 @@ def test_email_logs_in_from_the_environment_and_sends_both_parts(monkeypatch):
     seen = {}
 
     class Fake:
-        def __init__(self, host, port, timeout):
+        def __init__(self, host, port, timeout, local_hostname=None):
             seen["at"] = (host, port)
 
         def __enter__(self):

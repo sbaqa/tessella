@@ -172,7 +172,8 @@ def markdown(d: dict, run_link: str | None = None, links: list[tuple[str, str]] 
     if d["queue_url"]:
         lines += ["", f"Drafts are waiting for review: {d['queue_url']}"]
     elif d["drafted"]:
-        lines += ["", f"{d['drafted']} ticket draft(s) are waiting in the review queue (`tessella queue`)."]
+        where = f"`tessella review {run_link}`" if run_link else "`tessella dashboard`"
+        lines += ["", f"{d['drafted']} ticket draft(s) are waiting for review: {where}."]
     lines += ["", "_Nothing is filed to Jira without SDET approval._"]
     return "\n".join(lines)
 
