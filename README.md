@@ -71,7 +71,7 @@ Runs on a laptop with no GPU. Every outbound call is allowlisted, every model ca
 <td valign="top">
 
 ### 📊 Review and report
-A review queue, a drag-and-drop Board, a dashboard with measured time saved, a link into your Allure report and a summary comment on the pull request.
+A dashboard, a drag-and-drop Board, a dashboard with measured time saved, a link into your Allure report and a summary comment on the pull request.
 
 </td>
 </tr>
@@ -83,7 +83,7 @@ Real screens from the included demo shop, on a small local model.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/media/queue.png" alt="Review queue: one card per failure with what to do, the ticket and the evidence"><br><b>Review queue.</b> One card per failure, with what to do next.</td>
+<td width="50%"><img src="docs/media/queue.png" alt="Dashboard: one card per failure with what to do, the ticket and the evidence"><br><b>Dashboard.</b> One card per failure, with what to do next.</td>
 <td width="50%"><img src="docs/media/fix.png" alt="A ticket draft carrying a proposed fix that was checked in a copy of the project"><br><b>A checked fix on the ticket.</b> Tested before you ever see it.</td>
 </tr>
 <tr>
@@ -101,7 +101,7 @@ Real screens from the included demo shop, on a small local model.
 
 ## Quick start
 
-You need Python 3.12 and the [Allure command line](https://allurereport.org/docs/install/). This runs the demo shop's tests and shows the failures in the review queue:
+You need Python 3.12 and the [Allure command line](https://allurereport.org/docs/install/). This runs the demo shop's tests and shows the failures in the dashboard:
 
 ```bash
 git clone https://github.com/sbaqa/tessella && cd tessella
@@ -279,7 +279,7 @@ Public list prices checked on 8 November 2026. They change often, and these tool
 
 | Level | What |
 | --- | --- |
-| ✅ **Proven on real runs** | Triage on a local model · Jira filing and duplicate checks · review queue, report and Board · fixer agent on a planted bug · Schemathesis imports · offline bundle install |
+| ✅ **Proven on real runs** | Triage on a local model · Jira filing and duplicate checks · dashboard, report and Board · fixer agent on a planted bug · Schemathesis imports · offline bundle install |
 | 🧪 **Tested with simulated services** | PR comments on GitHub and GitLab · GitHub Issues filing · Loki and Elasticsearch logs · ZAP imports · team server on a GPU |
 | 🗓 **Planned** | Probe live replay · regression test export · automatic visual baselines |
 
@@ -470,7 +470,7 @@ Readers turn every input into Cases and Flows; no later stage touches raw files.
    file. Product bugs can also get a fix from the fixer agent, checked the same way with the app
    started from the copy. Regression tests from approved probe findings are planned. Environment,
    data and flaky problems become a line in the summary.
-7. **Review.** The SDET decides in the review queue. Only approval files to the configured
+7. **Review.** The SDET decides in the dashboard. Only approval files to the configured
    board (Jira or GitHub Issues — see `board:` in configuration).
 
 </details>
@@ -488,7 +488,7 @@ an empty list, a broken layout. Tessella uses screenshots in two layers:
 - **Vision reading.** The `vision` model role describes what on the screen explains the failure.
   The description becomes cited evidence like any other.
 
-Screenshots appear in the review queue and in ticket drafts. By default the data policy never
+Screenshots appear in the dashboard and in ticket drafts. By default the data policy never
 lets screenshots leave the network, so the vision role normally runs on a local model.
 
 </details>
@@ -510,7 +510,7 @@ flowchart LR
   subgraph inside["Inside your network"]
     E["Raw evidence<br/>logs · stacks · screenshots"] --> RV["Reader + vision<br/>local models"]
     RV --> S["Redacted summary<br/>+ failing test file"]
-    Q["SDET review queue"]
+    Q["SDET dashboard"]
     A["Audit log"]
   end
   subgraph cloud["Cloud, optional"]
@@ -602,16 +602,16 @@ calls file. Eval only measures: to review each failure and approve or reject its
 </details>
 
 <details>
-<summary><b>The review queue and how it learns</b></summary>
+<summary><b>The dashboard and how it learns</b></summary>
 
-The review queue (`tessella queue`, at `http://localhost:8484`) lists open Cases with their
+The dashboard (`tessella queue`, at `http://localhost:8484`) lists open Cases with their
 verdict, cited evidence, screenshots and the drafted ticket (description, steps to
 reproduce, actual result, expected result). For each draft an SDET can:
 
 | Action | Effect | What Tessella learns |
 | --- | --- | --- |
 | Approve | Ticket filed to the configured board (`board: jira` or `board: github`) | This signature is a real bug |
-| Edit and approve | SDET fixes the draft, then files | (planned) the edit is kept as an example; the queue has no edit form yet |
+| Edit, then approve | Open a failure, Edit, save, then approve to file your text | Tessella's own text is kept, so Undo my edits restores it, and a later triage keeps your words |
 | Reject with a reason | Not a bug, test bug, environment, test data, flaky or duplicate | The next run labels the same signature instead of drafting it again |
 | Delete | Removed as noise | Nothing: deletes are not training signal |
 
@@ -661,7 +661,7 @@ triage and approval behave exactly as the local-only flow.
 already stored. Open it from disk, attach it to a CI run, or send it to someone who has not
 installed anything: it has no external scripts, fonts or images, and nothing on it is fetched.
 
-For a page that stays current while you review, start the review queue (`tessella queue`) and
+For a page that stays current while you review, start the dashboard (`tessella queue`) and
 open `http://localhost:8484/report`. It is the same dashboard, rebuilt from the live store on
 every load, so a decision you make in the queue shows up on the next refresh. It makes no Jira
 calls, so it never waits on the board. The queue page links to it.
@@ -716,7 +716,7 @@ input carries a label on the page, so a manager can see how much of the number i
 
 | Label | Meaning | Where it comes from |
 | --- | --- | --- |
-| Measured | Taken from timestamps Tessella recorded | The review queue notes when a card is first shown; the gap to your decision (counted from your previous decision when cards are shown together, and capped at 10 minutes so an idle tab cannot distort it) is the review time |
+| Measured | Taken from timestamps Tessella recorded | The dashboard notes when a card is first shown; the gap to your decision (counted from your previous decision when cards are shown together, and capped at 10 minutes so an idle tab cannot distort it) is the review time |
 | Calibrated | The median of manual investigations your team timed | `tessella calibrate`, or a time you already know, imported with `--minutes` |
 | Assumed | A default, used only until one of the above exists | 30 min for a failure that ends in a ticket, 15 min otherwise, 3 min per review. Editable on the page, and the page says "estimate" while any remain |
 
@@ -1005,10 +1005,14 @@ and `models.vision` yourself.
 | Command | What it does |
 | --- | --- |
 | `tessella init` | Interactive setup: write `tessella.yaml`, install the extras it needs, start a project-scoped Ollama server and pull models, if you chose local models. Option: `--config` |
-| `tessella triage [REPORTS...]` | Collect, cluster, investigate and judge failures; fill the review queue. Options: `--config`, `--no-rerun` (artifacts only, fast), `--no-model` (collect and cluster only), `--json` (each cluster with its earlier decision: `decision`, `decided_at`, `decided_by`, `ticket_key`, `ticket_url`) |
+| `tessella triage [REPORTS...]` | Collect, cluster, investigate and judge failures; fill the dashboard. Options: `--config`, `--no-rerun` (artifacts only, fast), `--no-model` (collect and cluster only), `--json` (each cluster with its earlier decision: `decision`, `decided_at`, `decided_by`, `ticket_key`, `ticket_url`) |
 | `tessella probe [TRACES...]` | Link IDs in recorded flows and plan mutations; the plan is stored and shown in the report. Option: `--flow NAME`. It sends nothing; for findings, pass Schemathesis or ZAP reports to `tessella triage` |
-| `tessella ci [REPORTS...]` | Triage inside a pipeline, print one summary, always exit 0 so Tessella never fails your build. Options: `--comment` (post the summary on the PR/MR, see [Running in CI](#running-in-ci)), `--queue-url` |
-| `tessella queue` | Open the review queue on `http://localhost:8484`; the live dashboard is at `/report`. Options: `--port`, `--host` (beyond loopback needs `team.reviewers`), `--tls-cert`/`--tls-key` for HTTPS |
+| `tessella ci [REPORTS...]` | Triage inside a pipeline, print one summary, always exit 0 so Tessella never fails your build. Options: `--comment` (post the summary on the PR/MR, see [Running in CI](#running-in-ci)), `--queue-url`, `--no-rerun`, `--no-model`, `--minutes`, `--digest` |
+| `tessella review [LINK or FILE]` | Bring a CI run's results here and open the dashboard. Options: `--case`, `--port`, `--no-open` |
+| `tessella snapshot [FOLDER]` | Copy the database and screenshots into one folder for CI to publish as the `tessella-db` artifact |
+| `tessella drafts DIGEST` | Write one plain page with every ticket draft of a CI run, for CI to publish next to its reports. Options: `--out`, `--link` |
+| `tessella notify DIGEST` | Send a CI run's findings with links to its reports: PR/MR comment, email, CI Summary page. Options: `--link NAME=URL`, `--drafts-url`, `--comment`, `--email`, `--email-to`, `--smtp-host`, `--smtp-port`, `--email-from` |
+| `tessella queue` | Open the dashboard on `http://localhost:8484`; the live dashboard is at `/report`. Options: `--port`, `--host` (beyond loopback needs `team.reviewers`), `--tls-cert`/`--tls-key` for HTTPS |
 | `tessella report` | Write an offline HTML dashboard to `.tessella/report.html`: failures as tiles, the funnel to tickets, reviewer agreement, evidence quality, model calls and run history. Options: `--out PATH`, `--open`, `--view full\|management`, `--config` |
 | `tessella calibrate [SIGNATURE]` | Time a manual investigation on a raw failure (no verdict shown) so the time-saved figure rests on your team's own numbers. Options: `--minutes N` to import a time you already know, `--no-ticket` if it did not end in a ticket, `--note`, `--list`, `--config` |
 | `tessella sync` | Read the status of the Jira tickets Tessella filed (fixed, closed as not a bug, still open) and store it for the report. Read-only. Option: `--config` |
@@ -1153,16 +1157,129 @@ A class goes to a cloud model only if it is in `may_leave` and not in `never_lea
 <details>
 <summary>💬 <b>Running in CI</b></summary>
 
-`tessella ci` is designed to run after your tests, only when they fail, and never to break the
-build itself. Example for GitHub Actions:
+`tessella ci` runs after your tests, only when they fail, and never breaks the build itself.
+On GitHub Actions the Tessella action does everything, including running a real model on the
+runner, so your logs and code stay inside the job:
+
+```yaml
+permissions: { contents: read, pull-requests: write }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      # ... install your project and run your tests ...
+      - uses: sbaqa/tessella@master
+        if: failure()
+```
+
+It installs Tessella away from your project's packages, installs Ollama, downloads the model
+your config names (cached after the first run, about 3.4 GB for the default), restores what
+Tessella remembers, re-runs each failing test, judges the failures, comments on the pull
+request and uploads the report. Your `tessella.yaml` needs `api.github.com` in `network.allow`
+for the comment. Inputs: `reports`, `config`, `working-directory`, `use-model`, `rerun`,
+`comment`, `minutes`, `ollama-version`.
+
+The comment, the run's Summary page and the email all carry a **Reports** section with direct
+links. The action uploads the report as one unzipped file, so its link opens the HTML page;
+pass your own uploads with `links`, one `NAME=URL` per line, and set `email-to` to get the email:
+
+```yaml
+- id: allure                        # one file: allure generate --single-file
+  uses: actions/upload-artifact@v7
+  with: { path: allure-report.html, archive: false }
+- uses: sbaqa/tessella@master
+  if: failure()
+  with:
+    links: Allure report=${{ steps.allure.outputs.artifact-url }}
+    email-to: ${{ secrets.TESSELLA_EMAIL_TO }}
+    smtp-host: smtp.gmail.com       # also in network.allow
+    smtp-username: ${{ secrets.SMTP_USERNAME }}
+    smtp-password: ${{ secrets.SMTP_PASSWORD }}
+```
+
+Outside the action: `tessella ci --no-comment --digest d.json`, upload your reports, then
+`tessella notify d.json --link "Report=URL" --comment --email`. The links need a GitHub sign-in
+with access to the repository, and they last as long as the artifact does (90 days by default).
+
+A standard runner has no GPU, so the model runs on 4 CPU cores. `minutes` (default 25) stops
+asking the model after that long and reports what is left as not judged. With `use-model:
+false`, or if the model cannot be installed, you still get the failures grouped, the kind of
+each one, which ones the board already has (by the ticket's `tessella-<signature>` label, when
+Jira is configured) and how often each failed before.
+
+Anywhere else, run the command yourself. Install Ollama and `tessella models pull` first to
+judge with a model, or add `--no-model`:
 
 ```yaml
 - name: Investigate failures with Tessella
   if: failure()
   run: |
-    pip install "tessella[llm,vision] @ git+https://github.com/sbaqa/tessella"  # a private repo needs a token
-    tessella ci playwright-report/ test-results/*.xml
+    pip install "tessella[llm,vision] @ git+https://github.com/sbaqa/tessella"
+    tessella ci --minutes 25 playwright-report/ test-results/*.xml
 ```
+
+**Review a CI run on your laptop.** CI triages and publishes its results; you decide locally. No
+server is involved, and after the one download everything works offline. The email and the
+comment give you the command for that run:
+
+```bash
+tessella review https://github.com/acme/app/actions/runs/123
+```
+
+It downloads the `tessella-db` artifact, merges it into your local database, starts the review
+queue and opens your browser. To read first, each failure in the email has **Open draft**: the full ticket
+on a plain page published with the run (`tessella drafts`, then `tessella notify --drafts-url`).
+A run link needs a token from the environment, used only for that provider:
+
+| CI | Link it reads | Token |
+| --- | --- | --- |
+| GitHub Actions | `.../actions/runs/ID` | `GITHUB_TOKEN`, or `gh auth login` |
+| GitLab CI | `.../-/pipelines/ID` or `.../-/jobs/ID` | `GITLAB_TOKEN` |
+| Azure DevOps | `.../_build/results?buildId=ID` | `AZURE_DEVOPS_PAT` |
+| Jenkins | `.../job/NAME/ID/` | `JENKINS_USER` and `JENKINS_TOKEN` |
+| CircleCI | `.../workflows/ID/jobs/ID` | `CIRCLE_TOKEN` |
+| Anything else | The downloaded artifact: `tessella review ./tessella-db.zip` | None |
+
+To publish the results outside the GitHub action, run these after your tests and keep the folder
+as an artifact named `tessella-db` that lasts long enough to review:
+
+```bash
+tessella ci --minutes 25
+tessella snapshot .tessella/ci-export
+```
+
+```yaml
+# Azure Pipelines
+- publish: .tessella/ci-export
+  artifact: tessella-db
+  condition: always()
+
+# GitLab CI
+artifacts: { when: always, paths: [.tessella/ci-export/] }
+
+# CircleCI
+- store_artifacts: { path: .tessella/ci-export, destination: tessella-db }
+```
+
+```groovy
+// Jenkins
+archiveArtifacts artifacts: '.tessella/ci-export/**'
+```
+
+Keep those artifacts on a private project: they hold failure details, redacted as they were read.
+
+**Decisions go back to CI through a file.** Every decision is written to
+`tessella-decisions.jsonl` in your repository: the failure's ids, the decision, the reason and the
+ticket key, never logs or names. Commit it, and CI and your teammates know what was decided. A
+failure you rejected comes back to the local model only when its re-runs, its test or the code
+changed: it returns to the queue, marked as re-opened, if the new evidence changes the verdict,
+and nothing is filed without you. A rejection as a duplicate stays closed. Turn this off with
+`memory.recheck_rejected: false`, and the file with an empty `storage.decisions_file`.
+
+**Approving offline.** Reviewing, editing and deciding need no network. An approval made while
+the board is out of reach is kept and filed the next time the queue opens with a connection.
 
 **A comment on the pull request.** With `--comment` (or `ci.comment: true`), the summary, one
 row per failure cluster with its verdict and suspected cause, is posted on the pull request the
@@ -1354,7 +1471,7 @@ published on this machine's loopback only, and has its own network to file appro
 <summary><b>A team server</b></summary>
 
 `deploy/team/compose.yaml` runs one GPU machine for everyone: vLLM behind an API key, and the
-review queue several reviewers sign in to over HTTPS.
+dashboard several reviewers sign in to over HTTPS.
 
 - **Shared model.** Laptops and CI point a role at it with the key in an environment variable:
   `{provider: hosted_vllm, name: ..., base_url: "https://gpu-box.lan:8000/v1", api_key_env:
@@ -1442,7 +1559,7 @@ Exactly how each part was tested. "Tested" means covered by the unit tests in `t
 | Tile drawer, ticket outcomes (`tessella sync`), run comparison, short page, `tessella merge` | Works, tested offline with a faked Jira; the real status lookup has a test that needs your venv (respx) and has not run against a real Jira |
 | Time saved: measured review time, calibration, net figure with evidence labels | Works, tested; review timing starts the first time the queue shows a card, so earlier reviews are estimated. Not yet run against a real Jira |
 | Report dashboard (`tessella report`, and `/report` in the queue) | Works, tested; reads real data from the store and audit log, with customization saved per browser. Run history only exists from the first triage after upgrading |
-| Review queue with screenshots, Jira/GitHub filing on approve | Works; filed 3 tickets with screenshots to a real Jira Cloud project. GitHub filing not yet tried against a real repo |
+| Dashboard with screenshots, Jira/GitHub filing on approve | Works; filed 3 tickets with screenshots to a real Jira Cloud project. GitHub filing not yet tried against a real repo |
 | Probe: ID linking, mutations, oracles, flow shrinking | Building blocks work and are tested |
 | Probe: replay against a live system, identity login | Stub (planned for v2) |
 | Probe findings from Schemathesis (JUnit) and ZAP (traditional JSON) reports | Works, tested with a real Schemathesis 4 report; the ZAP report is a hand-written sample of its documented format |

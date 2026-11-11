@@ -217,6 +217,27 @@ class Fix(BaseModel):
     suite_command: str | None = None
 
 
+class Email(BaseModel):
+    """Where `tessella notify --email` sends a CI run's summary. The SMTP host must be in
+    network.allow. The login comes from the env vars named here, never from this file."""
+
+    to: list[str] = Field(default_factory=list)
+    host: str | None = None
+    port: int = 587
+    tls: Literal["starttls", "ssl", "none"] = "starttls"
+    sender: str | None = None  # default: the login
+    username_env: str = "SMTP_USERNAME"
+    password_env: str = "SMTP_PASSWORD"
+
+    @property
+    def username(self) -> str | None:
+        return os.environ.get(self.username_env)
+
+    @property
+    def password(self) -> str | None:
+        return os.environ.get(self.password_env)
+
+
 class Ci(BaseModel):
     """`tessella ci`: a summary comment on the pull request (GitHub Actions) or merge request
     (GitLab CI) the job runs for, edited in place on each run. Off unless turned on here or
@@ -228,6 +249,10 @@ class Ci(BaseModel):
     token_env: str | None = None
     # Linked from the comment, e.g. a team queue: https://tessella.lan:8484
     queue_url: str | None = None
+    # Stop asking the model after this many minutes; failures left over are reported as not
+    # judged. A CPU runner is slow, and a CI job has a time limit. None: no limit.
+    max_minutes: float | None = None
+    email: Email = Field(default_factory=Email)
 
 
 class OllamaLocal(BaseModel):
@@ -252,6 +277,9 @@ class Memory(BaseModel):
     # Reviewed failures most like this one, shown to the reader as calibration examples.
     examples: int = 2
     example_threshold: float = 0.75
+    # Ask the model again about a rejected failure that comes back with new evidence. It
+    # returns to the queue only if the verdict changes, and nothing is filed without a person.
+    recheck_rejected: bool = True
 
 
 class Cache(BaseModel):
@@ -309,6 +337,9 @@ class Mcp(BaseModel):
 
 class Storage(BaseModel):
     path: str = ".tessella/tessella.sqlite"
+    # Decisions as a small file you commit, so CI and teammates know them. Failure ids,
+    # decisions and ticket keys only, never logs. Relative to inputs.repo; empty turns it off.
+    decisions_file: str = "tessella-decisions.jsonl"
 
 
 class Settings(BaseModel):

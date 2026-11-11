@@ -1,0 +1,220 @@
+name: Tessella triage
+description: Explain why tests failed with a local model on the runner, and comment on the pull request.
+branding:
+  icon: search
+  color: blue
+
+inputs:
+  reports:
+    description: Test reports to read, separated by spaces. Default is inputs.reports in your config.
+    default: ""
+  config:
+    description: Path to the Tessella config, from working-directory.
+    default: tessella.yaml
+  working-directory:
+    description: Where to run Tessella. Your config and .tessella folder live here.
+    default: "."
+  use-model:
+    description: Judge failures with a local model. With false, failures are only grouped.
+    default: "true"
+  rerun:
+    description: Re-run each failing test first, which is how flaky tests are told apart.
+    default: "true"
+  comment:
+    description: Post the summary on the pull request. Needs pull-requests write permission.
+    default: "true"
+  minutes:
+    description: Stop asking the model after this long. Failures left over are reported as not judged.
+    default: "25"
+  ollama-version:
+    description: Ollama release to install on the runner.
+    default: "0.32.4"
+  links:
+    description: More reports to link, one NAME=URL per line (for example the artifact-url of your own upload).
+    default: ""
+  email-to:
+    description: Email the summary to these addresses, comma separated. Empty sends no email.
+    default: ""
+  email-from:
+    description: Sender address. Default is the SMTP login.
+    default: ""
+  smtp-host:
+    description: SMTP server. It must be in network.allow.
+    default: ""
+  smtp-port:
+    description: SMTP port.
+    default: "587"
+  smtp-username:
+    description: SMTP login. Pass it from a secret.
+    default: ""
+  smtp-password:
+    description: SMTP password. Pass it from a secret.
+    default: ""
+
+outputs:
+  report-url:
+    description: Direct link to the Tessella report on this run.
+    value: ${{ steps.report.outputs.artifact-url }}
+
+runs:
+  using: composite
+  steps:
+    # Its own environment, off PATH, so re-runs still use your project's pytest and packages.
+    - id: python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        update-environment: false
+    - name: Install Tessella
+      shell: bash
+      env:
+        PYTHON: ${{ steps.python.outputs.python-path }}
+      run: |
+        "$PYTHON" -m venv "$RUNNER_TEMP/tessella"
+        "$RUNNER_TEMP/tessella/bin/pip" install -q "${GITHUB_ACTION_PATH}[vision,html]"
+
+    - name: Restore what Tessella remembers
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.working-directory }}/.tessella/tessella.sqlite
+        key: tessella-db-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: tessella-db-
+
+    # One download per set of models, whatever else changes in the config.
+    - name: Find the models
+      id: models
+      if: inputs.use-model == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CONFIG: ${{ inputs.config }}
+      run: |
+        "$RUNNER_TEMP/tessella/bin/python" - "$CONFIG" >> "$GITHUB_OUTPUT" <<'PY'
+        import hashlib, sys
+        from tessella import config
+        s = config.load(sys.argv[1])
+        names = {m.name for m in map(s.models.get, ("reader", "vision", "fixer", "embedder")) if m}
+        print("key=" + hashlib.sha256(" ".join(sorted(names)).encode()).hexdigest()[:16])
+        PY
+    - name: Restore the model
+      if: inputs.use-model == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.working-directory }}/.tessella/models
+        key: tessella-models-${{ runner.os }}-${{ steps.models.outputs.key }}
+    - name: Install the model
+      id: model
+      if: inputs.use-model == 'true'
+      continue-on-error: true  # no model is a grouped summary, not a failed job
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        OLLAMA_VERSION: ${{ inputs.ollama-version }}
+        CONFIG: ${{ inputs.config }}
+      run: |
+        for wait in 5 20 45; do  # a download cut off half way is common, and worth retrying
+          command -v ollama >/dev/null && break
+          curl -fsSL https://ollama.com/install.sh | sh || sleep "$wait"
+        done
+        sudo systemctl stop ollama 2>/dev/null || true  # Tessella runs its own server
+        "$RUNNER_TEMP/tessella/bin/tessella" models pull --config "$CONFIG"
+
+    # The findings are sent after the reports are uploaded, so they can link to them.
+    - name: Triage the failures
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        REPORTS: ${{ inputs.reports }}
+        CONFIG: ${{ inputs.config }}
+        MINUTES: ${{ inputs.minutes }}
+        RERUN: ${{ inputs.rerun }}
+        HAS_MODEL: ${{ steps.model.outcome == 'success' }}
+        WANTS_MODEL: ${{ inputs.use-model }}
+      run: |
+        args=(ci --config "$CONFIG" --minutes "$MINUTES" --no-comment --digest .tessella/ci-digest.json)
+        [ "$RERUN" = "true" ] || args+=(--no-rerun)
+        [ "$HAS_MODEL" = "true" ] || args+=(--no-model)
+        [ "$HAS_MODEL" != "true" ] && [ "$WANTS_MODEL" = "true" ] && args+=(--model-failed)
+        read -ra reports <<< "$REPORTS"
+        "$RUNNER_TEMP/tessella/bin/tessella" "${args[@]}" "${reports[@]}"
+
+    - name: Build the report
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CONFIG: ${{ inputs.config }}
+      run: '"$RUNNER_TEMP/tessella/bin/tessella" report --config "$CONFIG" -o tessella-report.html'
+    # A single unzipped file, so its link opens the report instead of downloading a zip.
+    - id: report
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        path: ${{ inputs.working-directory }}/tessella-report.html
+        archive: false
+
+    # One plain page with every draft, so a link from the email opens a draft on the CI run.
+    - name: Build the ticket drafts page
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CONFIG: ${{ inputs.config }}
+        REPORT_URL: ${{ steps.report.outputs.artifact-url }}
+        LINKS: ${{ inputs.links }}
+      run: |
+        [ -f .tessella/ci-digest.json ] || exit 0
+        args=(drafts .tessella/ci-digest.json --config "$CONFIG" -o tessella-drafts.html --link "Tessella report=$REPORT_URL")
+        while IFS= read -r line; do [ -n "$line" ] && args+=(--link "$line"); done <<< "$LINKS"
+        "$RUNNER_TEMP/tessella/bin/tessella" "${args[@]}"
+    - id: drafts
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        path: ${{ inputs.working-directory }}/tessella-drafts.html
+        archive: false
+        if-no-files-found: ignore
+
+    # What `tessella review` fetches. The cache above is CI's own memory and cannot be downloaded.
+    - name: Publish the results for review
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CONFIG: ${{ inputs.config }}
+      run: '"$RUNNER_TEMP/tessella/bin/tessella" snapshot .tessella/ci-export --config "$CONFIG"'
+    - if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: tessella-db
+        path: ${{ inputs.working-directory }}/.tessella/ci-export
+        include-hidden-files: true
+
+    - name: Send the findings
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        CONFIG: ${{ inputs.config }}
+        COMMENT: ${{ inputs.comment }}
+        REPORT_URL: ${{ steps.report.outputs.artifact-url }}
+        DRAFTS_URL: ${{ steps.drafts.outputs.artifact-url }}
+        LINKS: ${{ inputs.links }}
+        EMAIL_TO: ${{ inputs.email-to }}
+        EMAIL_FROM: ${{ inputs.email-from }}
+        SMTP_HOST: ${{ inputs.smtp-host }}
+        SMTP_PORT: ${{ inputs.smtp-port }}
+        SMTP_USERNAME: ${{ inputs.smtp-username }}
+        SMTP_PASSWORD: ${{ inputs.smtp-password }}
+      run: |
+        [ -f .tessella/ci-digest.json ] || exit 0
+        args=(notify .tessella/ci-digest.json --config "$CONFIG" --link "Tessella report=$REPORT_URL")
+        while IFS= read -r line; do [ -n "$line" ] && args+=(--link "$line"); done <<< "$LINKS"
+        [ -n "$DRAFTS_URL" ] && args+=(--drafts-url "$DRAFTS_URL")
+        [ "$COMMENT" = "true" ] && args+=(--comment)
+        if [ -n "$EMAIL_TO" ]; then
+          args+=(--email --email-to "$EMAIL_TO" --smtp-host "$SMTP_HOST" --smtp-port "$SMTP_PORT")
+          [ -n "$EMAIL_FROM" ] && args+=(--email-from "$EMAIL_FROM")
+        fi
+        "$RUNNER_TEMP/tessella/bin/tessella" "${args[@]}"

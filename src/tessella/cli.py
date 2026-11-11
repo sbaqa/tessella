@@ -3,6 +3,8 @@ eval, models, reindex, export-dataset."""
 
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -255,22 +257,122 @@ def ci(reports: list[str] = typer.Argument(None), cfg: Optional[Path] = typer.Op
        comment: Optional[bool] = typer.Option(None, "--comment/--no-comment", help="Post the summary on the pull/merge request (default: ci.comment)."),
        queue_url: Optional[str] = typer.Option(None, "--queue-url", help="Review queue link for the comment (default: ci.queue_url)."),
        no_rerun: bool = typer.Option(False, "--no-rerun", help="Use artifacts only (fast)."),
-       no_model: bool = typer.Option(False, "--no-model", help="Collect and cluster only, for a runner with no model.")):
+       no_model: bool = typer.Option(False, "--no-model", help="Collect and cluster only, for a runner with no model."),
+       minutes: Optional[float] = typer.Option(None, "--minutes", help="Stop asking the model after this long (default: ci.max_minutes); the rest are reported as not judged."),
+       digest: Optional[Path] = typer.Option(None, "--digest", help="Also save the findings here, for tessella notify after the reports are uploaded."),
+       model_failed: bool = typer.Option(False, "--model-failed", help="With --no-model: say the model could not be installed, rather than that this runner has none.")):
     """Run triage (and later probe) in CI, print one summary and optionally comment it on the PR. Always exits 0."""
     from tessella.integrations import ci_comment
     from tessella.pipeline import triage as run
 
     try:
         s = _settings(cfg, reports, models=not no_model)
-        result = run(s, rerun=not no_rerun, use_model=not no_model)
-        body = ci_comment.summary(result.cases, queue_url or s.ci.queue_url, result)
+        result = run(s, rerun=not no_rerun, use_model=not no_model, ask_board=True,
+                     minutes=minutes if minutes is not None else s.ci.max_minutes)
+        found = ci_comment.digest(result.cases, queue_url or s.ci.queue_url, result)
+        if model_failed and result.cases:
+            found["note"] = ("The model could not be installed on this runner, so failures are "
+                             "grouped but not judged. The next run tries again.")
+        body = ci_comment.markdown(found, ci_comment.run_url())
         console.print(body)
+        if digest:
+            digest.parent.mkdir(parents=True, exist_ok=True)
+            digest.write_text(json.dumps(found), encoding="utf-8")
         if comment if comment is not None else s.ci.comment:
             _post_ci_comment(s, body)
     except Exception as exc:  # CI must never fail the build because of Tessella
         console.print(f"[red]Tessella error:[/] {exc}")
     _offline_verdict(fail=False)
     raise typer.Exit(0)
+
+
+@app.command()
+def drafts(digest: Path = typer.Argument(..., help="The file tessella ci --digest wrote."),
+           out: Path = typer.Option(Path("tessella-drafts.html"), "--out", "-o"),
+           cfg: Optional[Path] = typer.Option(None, "--config", "-c"),
+           link: list[str] = typer.Option([], "--link", help="A report to link, as NAME=URL. Repeat it.")):
+    """Write one plain page with every ticket draft of a CI run, to publish next to its reports. Always exits 0."""
+    from tessella.integrations import ci_comment
+    from tessella.memory.store import Store
+    from tessella.report import drafts as page
+
+    try:
+        s = config.load(cfg)
+        run = ci_comment.run_url()
+        links = [tuple(x.split("=", 1)) for x in link if "=" in x and x.split("=", 1)[1]]
+        if run:
+            links.append(("CI run", run))
+        out.write_text(page.render(json.loads(digest.read_text(encoding="utf-8")), Store(s.storage.path),
+                                   ci_comment.context(), run, links), encoding="utf-8")
+        console.print(f"Drafts written to [bold]{out}[/]")
+    except Exception as exc:  # CI must never fail the build because of Tessella
+        console.print(f"[red]Tessella error:[/] {exc}")
+    raise typer.Exit(0)
+
+
+@app.command()
+def notify(digest: Path = typer.Argument(..., help="The file tessella ci --digest wrote."),
+           cfg: Optional[Path] = typer.Option(None, "--config", "-c"),
+           link: list[str] = typer.Option([], "--link", help="A report to link, as NAME=URL. Repeat it."),
+           comment: bool = typer.Option(False, "--comment", help="Post the summary on the pull/merge request."),
+           email: bool = typer.Option(False, "--email", help="Email the summary to ci.email.to."),
+           email_to: Optional[str] = typer.Option(None, "--email-to", help="Recipients, comma separated (default: ci.email.to)."),
+           smtp_host: Optional[str] = typer.Option(None, "--smtp-host", help="SMTP server (default: ci.email.host)."),
+           smtp_port: Optional[int] = typer.Option(None, "--smtp-port"),
+           email_from: Optional[str] = typer.Option(None, "--email-from"),
+           drafts_url: Optional[str] = typer.Option(None, "--drafts-url", help="Where CI published tessella drafts' page; each failure links to its draft there.")):
+    """Send a CI run's findings, with links to its reports: PR comment, email, CI summary page. Always exits 0."""
+    from tessella.integrations import ci_comment
+
+    try:
+        s = config.load(cfg)
+        d = json.loads(digest.read_text(encoding="utf-8"))
+        links = [tuple(x.split("=", 1)) for x in link if "=" in x and x.split("=", 1)[1]]
+        if drafts_url:
+            links.insert(0, ("Ticket drafts", drafts_url))
+        ctx, run = ci_comment.context(), ci_comment.run_url()
+        all_links = [*links, *([("CI run", run)] if run else []),
+                     *([(ctx["change"], ctx["change_url"])] if ctx["change_url"] else [])]
+        body = ci_comment.markdown(d, run, links, drafts_url)
+        summary_page = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary_page:
+            with open(summary_page, "a", encoding="utf-8") as fh:
+                fh.write(body + "\n")
+        if comment:
+            _post_ci_comment(s, body)
+        if email:
+            mail = s.ci.email
+            mail.to = [a.strip() for a in email_to.split(",") if a.strip()] if email_to else mail.to
+            mail.host, mail.sender = smtp_host or mail.host, email_from or mail.sender
+            mail.port = smtp_port or mail.port
+            _send_email(s, d, ctx, all_links, drafts_url)
+    except Exception as exc:  # CI must never fail the build because of Tessella
+        console.print(f"[red]Tessella error:[/] {exc}")
+    raise typer.Exit(0)
+
+
+def _send_email(s: config.Settings, d: dict, ctx: dict, links: list, drafts: str | None = None) -> None:
+    """Email the summary, or say plainly why not. Never raises."""
+    from tessella import egress
+    from tessella.integrations import ci_comment, ci_email
+
+    if egress.active():
+        console.print("[yellow]Not emailing:[/] offline mode.")
+        return
+    if not (s.ci.email.to and s.ci.email.host):
+        console.print("[yellow]Not emailing:[/] set the recipients and the SMTP host.")
+        return
+    try:
+        run = ci_comment.run_url()
+        ci_email.send(s.ci.email, ci_email.subject(d, ctx), ci_email.text_body(d, ctx, links, run, drafts),
+                      ci_email.html_body(d, ctx, links, run, drafts), s.network.allow)
+        console.print(f"Emailed {_count_of(s.ci.email.to)}.")
+    except Exception as exc:  # noqa: BLE001 - an email is never worth a failed build
+        console.print(f"[yellow]Could not email:[/] {exc}")
+
+
+def _count_of(people: list[str]) -> str:
+    return f"{len(people)} recipient{'' if len(people) == 1 else 's'}"
 
 
 def _post_ci_comment(s: config.Settings, body: str) -> None:
@@ -304,11 +406,14 @@ def queue(cfg: Optional[Path] = typer.Option(None, "--config", "-c"), port: int 
           tls_cert: Optional[Path] = typer.Option(None, "--tls-cert", help="Serve HTTPS with this certificate."),
           tls_key: Optional[Path] = typer.Option(None, "--tls-key", help="... and this private key."),
           no_sign_in: bool = typer.Option(False, "--no-sign-in", help="Listen beyond loopback without reviewers. Only inside a container whose port is published to 127.0.0.1.")):
-    """Open the review queue: on this machine, or for a team with each reviewer signed in."""
+    """Open the dashboard: on this machine, or for a team with each reviewer signed in."""
     from tessella.queue.app import serve
 
     serve(_settings(cfg, models=False), port, host=host, tls_cert=str(tls_cert) if tls_cert else None,
           tls_key=str(tls_key) if tls_key else None, no_sign_in=no_sign_in)
+
+
+app.command("dashboard", help="Open the dashboard. Same as tessella queue.")(queue)
 
 
 @app.command()
@@ -380,6 +485,59 @@ def merge(
 
 
 @app.command()
+def snapshot(out: Path = typer.Argument(Path(".tessella/ci-export"), help="Folder to write."),
+             cfg: Optional[Path] = typer.Option(None, "--config", "-c")):
+    """Copy the database and its screenshots into one folder, for CI to publish as an artifact named tessella-db."""
+    import shutil
+
+    from tessella.memory.store import Store
+
+    s = config.load(cfg)
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir(parents=True)
+    Store(s.storage.path).snapshot(out / "tessella.sqlite")
+    shots = Path(s.storage.path).parent / "screenshots"
+    if shots.is_dir():
+        shutil.copytree(shots, out / "screenshots")
+    console.print(f"Snapshot written to [bold]{out}[/]")
+
+
+@app.command()
+def review(source: Optional[str] = typer.Argument(None, help="Link to a CI run (GitHub, GitLab, Azure DevOps, Jenkins, CircleCI), or the downloaded tessella-db artifact. Omit to review what is already here."),
+           case: Optional[str] = typer.Option(None, "--case", help="Open this failure's card."),
+           cfg: Optional[Path] = typer.Option(None, "--config", "-c"),
+           port: int = 8484,
+           no_open: bool = typer.Option(False, "--no-open", help="Do not open the browser.")):
+    """Bring a CI run's results here and open the review queue. After the download, everything works offline."""
+    import socket
+    import threading
+    import webbrowser
+
+    from tessella import review as loader
+    from tessella.memory.store import Store
+    from tessella.queue.app import serve
+
+    s = _settings(cfg, models=False)
+    if source:
+        try:
+            added = loader.load(s, Store(s.storage.path), source)
+        except Exception as exc:  # noqa: BLE001 - a plain reason, not a traceback
+            console.print(f"[red]Could not load that run:[/] {exc}")
+            raise typer.Exit(1)
+        console.print(f"Loaded: {added['cases']} new failure(s), {added['decisions']} decision(s).")
+    url = f"http://127.0.0.1:{port}/" + (f"#case-{case}" if case else "")
+    with socket.socket() as probe:
+        running = probe.connect_ex(("127.0.0.1", port)) == 0
+    if not no_open:
+        threading.Timer(0 if running else 1.5, webbrowser.open, [url]).start()
+    if running:
+        console.print(f"The dashboard is already running: {url}")
+        return
+    console.print(f"Dashboard: {url}  Decisions are saved to [bold]{s.storage.decisions_file}[/]; commit it so CI knows them.")
+    serve(s, port)
+
+
+@app.command()
 def calibrate(
     signature: Optional[str] = typer.Argument(None, help="Cluster to time (signature or prefix). Default: the next one you have not seen in the queue."),
     minutes: Optional[float] = typer.Option(None, "--minutes", help="Record a time you already know, instead of using the stopwatch."),
@@ -448,6 +606,7 @@ def forget(
     cfg: Optional[Path] = typer.Option(None, "--config", "-c"),
 ):
     """List recorded decisions, or drop one so its failure returns to the review queue."""
+    from tessella.memory import decisions_file
     from tessella.memory.store import Store
 
     store = Store(_settings(cfg, models=False).storage.path)
@@ -478,6 +637,7 @@ def forget(
         raise typer.Exit(1)
     sig, (action, key) = next(iter(matches.items()))
     store.forget(sig)
+    decisions_file.remove(_settings(cfg, models=False), sig)
     console.print(f"Forgot {sig} ({action}{', ' + key if key else ''}). "
                   "It returns to the queue on the next triage or queue load.")
 

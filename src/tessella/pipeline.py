@@ -7,16 +7,29 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from tessella.cluster import cluster
 from tessella.cluster.recall import recall
 from tessella.collect import collect_cases, collect_flows
 from tessella.collect.findings import at_least
 from tessella.config import Settings
-from tessella.draft.ticket import ticket
+from tessella.draft.ticket import duplicates_block, keep_edits, patch_block, ticket
 from tessella.integrations import llm
+from tessella.memory import decisions_file
 from tessella.memory.store import Store
-from tessella.models import Action, Case, Category, Decision, Flow, Origin, Verdict
+from tessella.models import (
+    Action,
+    Case,
+    Category,
+    Decision,
+    Evidence,
+    EvidenceKind,
+    Flow,
+    Origin,
+    RejectReason,
+    Verdict,
+)
 from tessella.verdict import agent
 
 
@@ -32,6 +45,11 @@ class RunResult:
     jira_matches: dict[str, list[dict]] = field(default_factory=dict)
     # signature -> an approval that filed nothing (no board then), now judged again
     reopened: dict[str, Decision] = field(default_factory=dict)
+    # signature -> (earlier runs this failure appeared in, earlier runs looked at)
+    history: dict[str, tuple[int, int]] = field(default_factory=dict)
+    used_model: bool = True
+    board_checked: bool = False  # the board itself was asked which failures it already has
+    out_of_time: int = 0  # clusters the model did not reach within the time limit
 
 
 def _ticket_gone(settings: Settings, past) -> bool:
@@ -51,11 +69,94 @@ def _ticket_gone(settings: Settings, past) -> bool:
         return False
 
 
+def _filed_on_board(settings: Settings, signature: str) -> Decision | None:
+    """The Jira ticket already labelled with this failure, for a machine with no memory of
+    filing it (a CI runner). Only `tessella ci` asks: on a laptop the store knows, and
+    `tessella forget` must be able to bring a failure back. Fails open."""
+    j = settings.jira
+    if not _can_ask_board(settings):
+        return None
+    from tessella.integrations import jira
+
+    try:
+        found = jira.find_by_signature(j, signature, settings.network.allow)
+    except Exception:  # noqa: BLE001 - never re-file or stop a run on doubt
+        return None
+    if not found:
+        return None
+    return Decision(action=Action.approve, by="", at=datetime.now(), board="jira",
+                    ticket_key=found[0], ticket_url=found[1], linked_existing=True)
+
+
+def _worth_rechecking(settings: Settings, past: Decision, use_model: bool) -> bool:
+    """A rejected failure that came back gets another look, unless it duplicates a ticket."""
+    return (use_model and settings.memory.recheck_rejected and past.action == Action.reject
+            and past.reason != RejectReason.duplicate)
+
+
+def _fingerprint(case: Case) -> str:
+    """What could be new about a failure: its re-runs, its test and the code diff."""
+    import hashlib
+
+    parts = sorted((str(e.kind), e.summary if e.kind == EvidenceKind.rerun else e.excerpt)
+                   for e in case.evidence
+                   if e.kind in (EvidenceKind.rerun, EvidenceKind.test_source, EvidenceKind.git_diff))
+    return hashlib.sha256(repr(parts).encode()).hexdigest()
+
+
+def _said(past: Decision) -> str:
+    reason = f" as {str(past.reason).replace('_', ' ')}" if past.reason else ""
+    return f"rejected{reason} on {past.at:%d %b %Y}"
+
+
+def _rejection(past: Decision, signature: str) -> Evidence:
+    """The earlier rejection, for the model to weigh against what is known now."""
+    return Evidence(kind=EvidenceKind.memory, summary=f"A reviewer {_said(past)}",
+                    excerpt="The evidence has changed since that decision. Judge the failure on "
+                            "the evidence as it is now.", ref=signature)
+
+
+def _stands(result: RunResult, members: list[Case], past: Decision, prior: Case | None) -> None:
+    """A recalled decision: the failure keeps its earlier verdict and draft."""
+    result.recalled += 1
+    result.decisions[members[0].signature] = past
+    note = (f"Already filed as {past.ticket_key}." if past.ticket_key and not past.by else
+            f"Already {past.action}"
+            + (f" as {past.reason}" if past.reason else "")
+            + (f" → {past.ticket_key}" if past.ticket_key else "")
+            + f" on {past.at:%Y-%m-%d}.")
+    for c in members:
+        if prior and prior.verdict:
+            # Keep the real classification (e.g. product_bug) and draft; just note it was judged.
+            c.verdict = prior.verdict.model_copy(
+                update={"root_cause": f"{note} {prior.verdict.root_cause}"})
+            c.draft = prior.draft
+        else:
+            c.verdict = Verdict(category=Category.unknown, confidence=1.0, root_cause=note)
+
+
+def _can_ask_board(settings: Settings) -> bool:
+    from tessella import egress
+
+    j = settings.jira
+    return settings.board == "jira" and bool(j.url and j.project and j.token) and not egress.active()
+
+
+def _history(store: Store, signatures, last: int = 20) -> dict[str, tuple[int, int]]:
+    """How often each failure showed up in the runs before this one. Nice to have: a store
+    that cannot answer costs only this column."""
+    try:
+        runs = [r["detail"] if isinstance(r["detail"], dict) else {} for r in store.runs()[-last:]]
+    except Exception:  # noqa: BLE001
+        return {}
+    return {s: (sum(s in detail for detail in runs), len(runs)) for s in signatures}
+
+
 def _filed_nothing(settings: Settings, past) -> bool:
     """An approval that filed no ticket because no board was set up then, now that one is.
     That decision never reached anyone, so the failure is judged again and goes back to the
     queue. Approvals with a ticket and rejections stand."""
-    if past.action != Action.approve or past.ticket_key:
+    if past.action != Action.approve or past.ticket_key or past.pending:
         return False
     if settings.board == "jira":
         return bool(settings.jira.url and settings.jira.project)
@@ -255,9 +356,7 @@ def _note_duplicates(draft, issues: list[dict]) -> None:
         return
     draft.jira_matches = issues
     draft.possible_duplicates += [i["key"] for i in issues if i["key"] not in draft.possible_duplicates]
-    lines = "\n".join(f"- {i['key']} ({i['status'] or 'unknown status'}): {i['summary']}"
-                      for i in issues)
-    draft.body += f"\n\n**Possible duplicates already in Jira:**\n{lines}"
+    draft.body += duplicates_block(draft)
 
 
 def _preflight(settings: Settings) -> list:
@@ -288,46 +387,46 @@ def _warm_models(settings: Settings) -> None:
             local_llm.warm(ms, settings.network.allow)
 
 
-def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> RunResult:
+def triage(settings: Settings, rerun: bool = True, use_model: bool = True,
+           ask_board: bool = False, minutes: float | None = None) -> RunResult:
+    """`ask_board` also checks the board for each failure (see _filed_on_board); `minutes`
+    stops asking the model after that long, leaving the remaining failures not judged."""
     started, model_before = time.monotonic(), llm.model_seconds()
     store = Store(settings.storage.path)
+    decisions_file.load(settings, store)
     cases = [c for c in collect_cases(settings.inputs.reports, settings.redact)
              if c.origin != Origin.probe_finding
              or at_least(c.severity, settings.probe.min_severity)]
     flows = collect_flows(settings.inputs.traces, settings.redact)
     clusters = cluster(cases)
-    result = RunResult(cases=cases, clusters=clusters, flows=flows)
+    result = RunResult(cases=cases, clusters=clusters, flows=flows, used_model=use_model,
+                       history=_history(store, clusters),
+                       board_checked=ask_board and _can_ask_board(settings))
     todo: list[list[Case]] = []
     verdicts: dict[str, Verdict | None] = {}
+    rechecks: dict[str, Decision] = {}
 
     for signature, members in clusters.items():
         lead = members[0]
         past = recall(lead, store)
         if past is not None and _ticket_gone(settings, past):
             store.forget(lead.signature)  # the filed ticket was deleted; re-surface for re-approval
+            decisions_file.remove(settings, lead.signature)
             past = None
         if past is not None and _filed_nothing(settings, past):
             store.forget(lead.signature)  # approved with no board: judge it afresh, file on approval
+            decisions_file.remove(settings, lead.signature)
             result.reopened[signature] = past
             past = None
-        if past is not None:
-            result.recalled += 1
-            result.decisions[signature] = past
-            # keeps its original verdict/draft; recall never re-saves. By signature as a
-            # fallback: a test that moved or was renamed has a new id but the same failure.
-            prior = store.get_case(lead.id) or store.case_with_signature(lead.signature)
-            note = (f"Already {past.action}"
-                    + (f" as {past.reason}" if past.reason else "")
-                    + (f" → {past.ticket_key}" if past.ticket_key else "")
-                    + f" on {past.at:%Y-%m-%d}.")
-            for c in members:
-                if prior and prior.verdict:
-                    # Keep the real classification (e.g. product_bug) and draft; just note it was judged.
-                    c.verdict = prior.verdict.model_copy(
-                        update={"root_cause": f"{note} {prior.verdict.root_cause}"})
-                    c.draft = prior.draft
-                else:
-                    c.verdict = Verdict(category=Category.unknown, confidence=1.0, root_cause=note)
+        if past is None and ask_board:
+            past = _filed_on_board(settings, lead.signature)
+        if past is not None and _worth_rechecking(settings, past, use_model):
+            rechecks[signature] = past  # judged again below if there is anything new
+        elif past is not None:
+            # By signature as a fallback: a test that moved or was renamed has a new id but
+            # the same failure. Recall never re-saves.
+            _stands(result, members, past,
+                    store.get_case(lead.id) or store.case_with_signature(lead.signature))
             continue
 
         todo.append(members)
@@ -337,23 +436,42 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
     green = settings.inputs.green_ref or store.last_green_commit()
     problems = _preflight(settings) if todo else []
     gathered: list[list[Case]] = []
+    settled: set[str] = set()
     for members in todo:
         try:
             _gather(members[0], settings, rerun, green, problems)
+            past = rechecks.get(members[0].signature)
+            if past is not None:
+                prior = store.get_case(members[0].id) or store.case_with_signature(members[0].signature)
+                seen = prior and (prior.recheck_fingerprint or _fingerprint(prior))
+                if seen == _fingerprint(members[0]):  # nothing new: the rejection stands
+                    settled.add(members[0].signature)
+                    _stands(result, members, past, prior)
+                    continue
+                members[0].evidence.append(_rejection(past, members[0].signature))
             if memory:
                 memory.recall(members[0], settings, store)
             gathered.append(members)
         except Exception as exc:  # noqa: BLE001 - one broken cluster must never cost the rest
             verdicts[members[0].signature] = _failed(exc)
+    todo = [m for m in todo if m[0].signature not in settled]
     # ... then the model, up to `parallel` clusters at once.
     if use_model and gathered:
         _warm_models(settings)
     workers = max(1, settings.models.reader.parallel)
+    deadline = None if minutes is None else started + minutes * 60
+
+    def in_time() -> bool:
+        return deadline is None or time.monotonic() < deadline
 
     def judge(members: list[Case]) -> tuple[str, Verdict | None]:
         try:
             examples = memory.examples.get(members[0].signature, "") if memory else ""
-            return members[0].signature, _judge(members[0], settings, use_model, examples, rerun)
+            ask = use_model and in_time()
+            verdict = _judge(members[0], settings, ask, examples, rerun)
+            if use_model and not ask and verdict is None:
+                result.out_of_time += 1
+            return members[0].signature, verdict
         except Exception as exc:  # noqa: BLE001
             return members[0].signature, _failed(exc)
 
@@ -370,12 +488,27 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
         verdict = verdicts.get(signature)
         duplicates = memory.duplicates.get(signature) if memory else None
         patch, in_jira = None, []
-        if (use_model and settings.models.fixer is not None and verdict
+        past = rechecks.get(signature)
+        if past is not None:
+            if verdict and verdict.category in (Category.product_bug, Category.test_bug):
+                store.reopen(signature, past)  # new evidence: a person decides again
+                decisions_file.remove(settings, signature)
+                result.reopened[signature] = past
+                for c in members:
+                    c.reopened_from = _said(past)
+            else:
+                prior = store.get_case(members[0].id) or store.case_with_signature(signature)
+                _stands(result, members, past, prior)
+                if prior and verdict:  # not asked again until the evidence changes again
+                    prior.recheck_fingerprint = _fingerprint(members[0])
+                    store.save_case(prior)
+                continue
+        if (use_model and in_time() and settings.models.fixer is not None and verdict
                 and verdict.category == Category.test_bug):
             from tessella.draft.patch import fix
 
             patch = fix(members[0], settings, rerun)  # re-runs: one cluster at a time
-        elif (use_model and rerun and settings.models.fixer is not None and verdict
+        elif (use_model and in_time() and rerun and settings.models.fixer is not None and verdict
               and verdict.category == Category.product_bug and settings.fix.product):
             from tessella.draft import fixer_agent
 
@@ -383,9 +516,9 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
         for c in members:
             _keep_screenshots(c, settings)
             c.verdict = verdict
-            # Both product bugs and test bugs are actionable tickets someone must fix;
-            # flaky/environment/test_data/unknown are not filed (see CLAUDE.md).
-            if verdict and verdict.category in (Category.product_bug, Category.test_bug):
+            # Bugs and flaky tests always get a draft for a person to review; nothing is filed
+            # without approval. environment/test_data/unknown get none (see CLAUDE.md).
+            if verdict and verdict.category in (Category.product_bug, Category.test_bug, Category.flaky):
                 c.draft = ticket(c, duplicates)
                 if c is members[0]:
                     in_jira = _jira_duplicates(c, settings, use_model)  # one search per cluster
@@ -394,11 +527,11 @@ def triage(settings: Settings, rerun: bool = True, use_model: bool = True) -> Ru
                 _note_duplicates(c.draft, in_jira)
                 if patch:
                     c.draft.patch, c.draft.patch_status = patch
-                    if c.draft.patch:
-                        what = ("Proposed fix" if verdict.category == Category.product_bug
-                                else "Proposed test patch")
-                        c.draft.body += (f"\n\n**{what}** ({c.draft.patch_status}):"
-                                         f"\n```diff\n{c.draft.patch}```")
+                    c.draft.body += patch_block(c.draft, verdict.category)
+                earlier = store.get_case(c.id)
+                if (earlier and earlier.signature == c.signature and earlier.draft
+                        and earlier.draft.original):
+                    keep_edits(c, earlier.draft)  # a re-run never overwrites a reviewer's words
             store.save_case(c)
         if memory:
             try:

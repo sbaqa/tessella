@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Edit a ticket draft in the review queue before filing: every field and the title, marked as edited, with undo. A later triage keeps a reviewer's words.
+- A GitHub Action (`uses: sbaqa/tessella@master`) that runs a real local model on the runner, triages the failures, comments on the pull request and uploads the report.
+- `tessella ci --minutes`: a time limit for the model, so a slow runner reports what it did not reach.
+
+- `tessella notify`: a structured email, the PR comment and the CI Summary page, each with direct links to the reports stored on the CI run.
+
+- `tessella review`: download a CI run from GitHub, GitLab, Azure DevOps, Jenkins or CircleCI (or open a downloaded file), merge it and open the queue. Each failure in the email has a Review button.
+- `tessella drafts`: one plain page with every ticket draft, published with the run. Each failure in the email and PR comment links to its draft, and filed failures link to their ticket.
+- `tessella snapshot`: the database and screenshots as one folder for a CI artifact.
+- Decisions are written to `tessella-decisions.jsonl` for you to commit, so CI and teammates know them.
+- A rejected failure that returns with new evidence is judged again by the local model, and comes back only if the verdict changes.
+- Approving while the board is out of reach is kept and filed when it can be reached.
+
+### Changed
+- One screen: the dashboard replaces the review queue. Each failure's panel has the full ticket, screenshots, Edit, an Allure link and one decision control. After a decision the next failure opens.
+- A failure with no draft can become a ticket: choose "It is a bug" and fill it in.
+- Failure tiles carry colour and a letter, and the page says which folder you are looking at.
+- The CI comment is useful with no model: failures are grouped with their kind, how often each failed before, which ones the board already has, and a link to the run.
+
 ## 0.1.0 (2026-11-08)
 
 ### Added

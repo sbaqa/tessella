@@ -52,6 +52,13 @@ probe:
 #   token_env: JIRA_TOKEN                  # NAME of the env var holding the token
 #   issue_type: Task                       # whichever type your project has
 
+# Email a CI run's findings and report links with tessella notify --email. Add the SMTP host
+# to network.allow. The login is read from the env vars SMTP_USERNAME and SMTP_PASSWORD.
+# ci:
+#   email:
+#     to: ["you@example.com"]
+#     host: smtp.gmail.com
+
 network:
   allow: ["127.0.0.1:11435", "localhost:11435"]   # add your Jira host when you set up a board
 
@@ -59,6 +66,7 @@ redact: ["Authorization", "Cookie", "password", "token"]
 
 storage:
   path: .tessella/tessella.sqlite
+  # decisions_file: tessella-decisions.jsonl   # commit it, so CI knows your decisions
 
 # The fixer agent proposes checked fixes for product bugs. Uncomment to turn it on, and add
 # `fixer: {provider: ollama_chat, name: "qwen3.5:4b", base_url: "http://127.0.0.1:11435"}`

@@ -25,6 +25,14 @@ if TYPE_CHECKING:
 OLLAMA_PROVIDERS = {"ollama", "ollama_chat"}
 
 
+
+def _ok(r, ms: ModelSettings) -> None:
+    """raise_for_status, except that a model the server does not have says so in plain words."""
+    if r.status_code == 404:
+        raise RuntimeError(f"the model {ms.name} is not on the model server at {_base(ms)}: "
+                           "run tessella models pull")
+    r.raise_for_status()
+
 def headers(ms: ModelSettings) -> dict[str, str]:
     """The API key header for a shared model server (vLLM `--api-key`, or Ollama behind a
     proxy that checks one). The key is read from the environment, never from the config."""
@@ -77,7 +85,7 @@ def ollama_chat(ms: ModelSettings, messages: list[dict], allow: list[str],
         return _ollama_stream(ms, body, allow, watch)
     with net.client(allow, timeout=ms.timeout_s, headers=headers(ms)) as c:
         r = c.post(f"{_base(ms)}/api/chat", json=body)
-        r.raise_for_status()
+        _ok(r, ms)
         data = r.json()
     tokens = (data.get("prompt_eval_count") or 0) + (data.get("eval_count") or 0)
     if watch is not None:
@@ -94,7 +102,7 @@ def _ollama_stream(ms: ModelSettings, body: dict, allow: list[str],
     last: dict = {}
     with (net.client(allow, timeout=ms.timeout_s, headers=headers(ms)) as c,
           c.stream("POST", f"{_base(ms)}/api/chat", json=body) as r):
-        r.raise_for_status()
+        _ok(r, ms)
         for line in r.iter_lines():
             if not line.strip():
                 continue
@@ -124,7 +132,7 @@ def openai_chat(ms: ModelSettings, messages: list[dict], allow: list[str],
                                    "json_schema": {"name": "reply", "schema": schema}}
     with net.client(allow, timeout=ms.timeout_s, headers=headers(ms)) as c:
         r = c.post(url, json=body)
-        r.raise_for_status()
+        _ok(r, ms)
         data = r.json()
     text = ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
     return text, (data.get("usage") or {}).get("total_tokens") or 0
@@ -145,11 +153,11 @@ def embed(ms: ModelSettings, texts: list[str], allow: list[str]) -> list[list[fl
             r = c.post(f"{base}/api/embed", json={"model": ms.name, "input": texts,
                                                   **({"keep_alive": ms.keep_alive}
                                                      if ms.keep_alive else {})})
-            r.raise_for_status()
+            _ok(r, ms)
             return r.json()["embeddings"]
         url = f"{base}/embeddings" if base.endswith("/v1") else f"{base}/v1/embeddings"
         r = c.post(url, json={"model": ms.name, "input": texts})
-        r.raise_for_status()
+        _ok(r, ms)
         return [d["embedding"] for d in sorted(r.json()["data"], key=lambda d: d["index"])]
 
 
@@ -164,7 +172,7 @@ def generate_stats(ms: ModelSettings, prompt: str, allow: list[str],
         body["think"] = ms.think
     with net.client(allow, timeout=ms.timeout_s, headers=headers(ms)) as c:
         r = c.post(f"{_base(ms)}/api/generate", json=body)
-        r.raise_for_status()
+        _ok(r, ms)
         d = r.json()
     return {"load_s": (d.get("load_duration") or 0) / 1e9,
             "prompt_tokens": d.get("prompt_eval_count") or 0,

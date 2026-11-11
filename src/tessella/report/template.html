@@ -44,12 +44,6 @@
   --c-product_bug: #3987e5; --c-test_bug: #d95926; --c-flaky: #199e70;
   --c-environment: #c98500; --c-test_data: #d55181; --c-unknown: #8a949e; --c-none: #5d6670;
 }
-/* The mosaic well is dark in both themes, so its tiles always use the dark-surface colours. */
-.p-mosaic {
-  --w-bg: #0f151a; --w-ink: #eaeef1; --w-ink-2: #aeb9c2; --w-line: #2a3540;
-  --w-product_bug: #3987e5; --w-test_bug: #d95926; --w-flaky: #199e70;
-  --w-environment: #c98500; --w-test_data: #d55181; --w-unknown: #8a949e; --w-none: #5d6670;
-}
 
 html { font-size: 16px; -webkit-text-size-adjust: 100%; }
 html[data-text="s"] { font-size: 14.5px; }
@@ -107,7 +101,7 @@ h1 {
   .p-funnel, .p-trust, .p-mix, .p-evidence, .p-compare { grid-column: span 6; }
 }
 @media (min-width: 1000px) {
-  .p-mosaic, .p-saved, .p-runs, .p-models, .p-outcomes { grid-column: span 8; }
+  .p-saved, .p-runs, .p-models, .p-outcomes { grid-column: span 8; }
   .p-funnel, .p-trust, .p-mix, .p-evidence, .p-compare { grid-column: span 4; }
   /* the short page: pairs that fill the row */
   body[data-view="management"] .p-saved { grid-column: span 8; }
@@ -125,55 +119,6 @@ h3 { font-size: 0.95rem; font-weight: 650; margin: 1.4rem 0 0.5rem; }
 .note { color: var(--ink-3); font-size: 0.82rem; max-width: 44em; margin: 0.8rem 0 0; }
 .empty { color: var(--ink-2); max-width: 36em; margin: 0; padding: 0.5rem 0; }
 
-/* the mosaic well */
-.p-mosaic { background: var(--w-bg); color: var(--w-ink); }
-.p-mosaic h2 { color: var(--w-ink); }
-.p-mosaic .lede { color: var(--w-ink-2); }
-.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0 0 1.1rem; }
-.chip-gap { width: 0.6rem; }
-.chip {
-  display: inline-flex; align-items: center; gap: 0.15rem; font-size: 0.82rem; cursor: pointer;
-  color: var(--w-ink); background: transparent; border: 1px solid var(--w-line); border-radius: 999px;
-  padding: 0.25rem 0.7rem 0.25rem 0.6rem;
-}
-.chip b { margin-left: 0.3rem; font-weight: 650; }
-.chip:hover { border-color: var(--w-ink-2); }
-.chip[aria-pressed="true"] { background: var(--w-ink); color: var(--w-bg); border-color: var(--w-ink); }
-.mosaic { display: flex; flex-wrap: wrap; gap: 1.6rem 1.8rem; align-items: flex-start; }
-.cluster { display: flex; flex-direction: column; gap: 0.5rem; max-width: 100%; }
-.tiles { display: grid; grid-template-columns: repeat(var(--cols), var(--tile)); gap: 3px; }
-.tile {
-  position: relative; display: block; width: var(--tile); height: var(--tile); border-radius: 4px;
-  border: 2px solid var(--hue); background: var(--hue); transition: opacity 0.15s, transform 0.15s;
-}
-.tile.is-open { background: color-mix(in srgb, var(--hue) 16%, var(--w-bg)); }
-.tile.is-rejected { background: repeating-linear-gradient(135deg, var(--hue) 0 2px, transparent 2px 6px); }
-.tile.dim { opacity: 0.16; }
-a.tile:hover { transform: translateY(-2px); }
-.tile::after {
-  content: attr(data-glyph); position: absolute; inset: 0; display: none; place-items: center;
-  font-weight: 800; font-size: calc(var(--tile) * 0.42); color: #0b0f12; line-height: 1;
-}
-.tile.is-rejected::after, .tile.is-open::after { color: var(--w-ink); }
-body.marks .tile::after { display: grid; }
-.mosaic[data-small] .tile::after { display: none !important; }
-.cap { margin: 0; font-size: 0.8rem; line-height: 1.3; color: var(--w-ink); }
-.cap span { color: var(--w-ink-2); }
-.mosaic[data-small] .cap { display: none; }
-.p-mosaic .cat-product_bug { --hue: var(--w-product_bug); }
-.p-mosaic .cat-test_bug { --hue: var(--w-test_bug); }
-.p-mosaic .cat-flaky { --hue: var(--w-flaky); }
-.p-mosaic .cat-environment { --hue: var(--w-environment); }
-.p-mosaic .cat-test_data { --hue: var(--w-test_data); }
-.p-mosaic .cat-unknown { --hue: var(--w-unknown); }
-.p-mosaic .cat-none { --hue: var(--w-none); }
-.p-mosaic .sw.st-open { background: var(--w-bg); box-shadow: inset 0 0 0 2px var(--w-ink-2); }
-.p-mosaic .sw.st-approved { background: var(--w-ink-2); box-shadow: none; }
-.p-mosaic .sw.st-rejected { background: repeating-linear-gradient(135deg, var(--w-ink-2) 0 2px, transparent 2px 4px); box-shadow: inset 0 0 0 1px var(--w-ink-2); }
-@media (prefers-reduced-motion: no-preference) {
-  .mosaic .tile { animation: settle 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(var(--i, 0) * 9ms); }
-  @keyframes settle { from { opacity: 0; transform: scale(0.55); } }
-}
 
 .cat-product_bug { --hue: var(--c-product_bug); }
 .cat-test_bug { --hue: var(--c-test_bug); }
@@ -297,8 +242,54 @@ tr[data-case] .test { cursor: pointer; }
 tr[data-case]:hover .test { text-decoration: underline; }
 tr.flash td { background: color-mix(in srgb, var(--focus) 22%, transparent); }
 
-/* one failure, opened from a tile or a table row */
-dialog.detail { width: min(34rem, 100%); }
+/* this run against the previous one */
+.p-compare { grid-column: 1 / -1; }
+table.trend { border-collapse: collapse; width: 100%; max-width: 34rem; margin: 0 0 1.2rem; font-size: 1rem; }
+table.trend th, table.trend td { padding: 0.45rem 0.7rem 0.45rem 0; text-align: right; border-bottom: 1px solid var(--line); }
+table.trend th:first-child { text-align: left; font-weight: 600; }
+table.trend thead th { color: var(--ink-3); font-size: 0.82rem; font-weight: 600; }
+table.trend .now { font-weight: 750; font-size: 1.2rem; }
+table.trend .chg { font-weight: 650; white-space: nowrap; }
+table.trend .chg.bad { color: #c0392b; } table.trend .chg.good { color: #16855e; } table.trend .chg.same { color: var(--ink-3); }
+ul.bars { list-style: none; display: flex; align-items: flex-end; gap: 0.7rem; height: 9rem; margin: 0; padding: 0; overflow-x: auto; }
+ul.bars li { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 2.6rem; font-size: 0.8rem; }
+ul.bars .stack { display: flex; flex-direction: column; width: 1.8rem; border-radius: 3px; overflow: hidden; }
+ul.bars small { color: var(--ink-3); white-space: nowrap; margin-top: 0.2rem; }
+ul.bars i, p.legend i { display: block; } i.bugs { background: var(--c-product_bug); } i.flaky { background: var(--c-flaky); } i.other { background: var(--c-none); }
+p.legend { display: flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--ink-2); margin: 0.6rem 0 0; }
+p.legend i { width: 0.7rem; height: 0.7rem; border-radius: 2px; margin-left: 0.6rem; } p.legend i:first-child { margin-left: 0; }
+
+/* one failure, opened from a table row */
+dialog.detail { width: min(46rem, 100%); }
+.stale { background: var(--panel); border-left: 4px solid var(--c-environment); border-radius: 6px; padding: 0.7rem 1rem; margin: 0 0 1rem; }
+.who { font-size: 0.85rem; color: var(--ink-2); }
+.detail .decision { background: var(--panel-2); border-radius: 8px; padding: 0.8rem 0.9rem; margin: 0.8rem 0 1rem; }
+.detail .decision label { display: block; font-weight: 650; font-size: 0.88rem; margin-bottom: 0.4rem; }
+.detail .decision .row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.detail .decision select { flex: 1 1 16rem; min-width: 0; font: inherit; padding: 0.45rem 0.55rem; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
+.detail .decision button { border: 1px solid var(--ink); background: var(--ink); color: var(--panel); border-radius: 6px; padding: 0.45rem 1.1rem; font-weight: 650; cursor: pointer; }
+.detail .decision button:disabled { opacity: 0.4; cursor: default; }
+.detail .decision .err { color: #c0392b; margin: 0.4rem 0 0; }
+.detail .todo { font-weight: 600; }
+.detail .tools { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin: 1.2rem 0 0.35rem; }
+.detail .tools h3 { margin: 0; }
+.detail .tools .actions-r { display: flex; gap: 0.4rem; }
+.detail .tools button, .detail .link { border: 1px solid var(--line); background: transparent; border-radius: 5px; padding: 0.25rem 0.7rem; cursor: pointer; font-size: 0.82rem; text-decoration: none; display: inline-block; }
+.detail dl.ticket { display: grid; grid-template-columns: 10rem minmax(0, 1fr); gap: 0.4rem 0.9rem; margin: 0; font-size: 0.92rem; }
+.detail dl.ticket dt { color: var(--ink-3); font-weight: 600; font-size: 0.84rem; }
+.detail dl.ticket dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.detail dl.ticket .changed { color: var(--focus); font-size: 0.72rem; font-weight: 700; margin-left: 0.3rem; }
+@media (max-width: 560px) { .detail dl.ticket { grid-template-columns: 1fr; } }
+.detail form.edit { display: grid; gap: 0.6rem; }
+.detail form.edit label { display: grid; gap: 0.2rem; font-size: 0.84rem; font-weight: 600; color: var(--ink-3); }
+.detail form.edit input, .detail form.edit textarea { font: inherit; font-size: 0.92rem; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0.45rem 0.55rem; width: 100%; }
+.detail form.edit textarea { resize: vertical; field-sizing: content; min-height: 3em; }
+.detail form.edit .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.detail form.edit .row button { border: 1px solid var(--line); background: transparent; border-radius: 5px; padding: 0.35rem 0.9rem; cursor: pointer; }
+.detail form.edit .row button.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.detail .shots { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.detail .shots img { width: 13rem; max-width: 100%; height: 8rem; object-fit: cover; object-position: top; border: 1px solid var(--line); border-radius: 6px; display: block; }
+.detail details.more summary { cursor: pointer; font-weight: 650; font-size: 0.88rem; margin: 1.1rem 0 0.35rem; }
 .detail .head h2 { font-size: 1.05rem; overflow-wrap: anywhere; padding-right: 0.5rem; }
 .detail .pills { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 1rem; }
 .detail .pill { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--line); border-radius: 999px; padding: 0.15rem 0.65rem; font-size: 0.82rem; }
@@ -353,7 +344,6 @@ h1 { font-size: clamp(1.35rem, 3vw, 2rem); margin: 1.2rem 0 1rem; max-width: 34e
 .pm { border: 0; background: transparent; cursor: pointer; border-radius: 4px; padding: 0 0.45rem;
       font-size: 1.2rem; line-height: 1.4; color: var(--ink-2); }
 .pm:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
-.p-mosaic .pm, .p-mosaic .grip { color: var(--w-ink-2); }
 .panel.collapsed .pb { display: none; }
 .panel.collapsed .ph { margin: 0; }
 .panel.dragging { opacity: 0.4; }
@@ -462,8 +452,8 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
     {{nav}}
     <button class="tool" id="open-prefs" type="button">Customize</button>
   </div>
-  <p class="meta">{{project}}, built {{generated}} from {{source}}</p>
-  <h1>{{headline}}</h1>
+  <p class="meta">{{project}}, built {{generated}}, folder {{source}}</p>
+  {{stale}}<h1>{{headline}}</h1>
   {{kpis}}
 </header>
 {{tabs}}
@@ -503,22 +493,6 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
       <label><input type="radio" name="density" value="compact"><span>Compact</span></label>
     </div></fieldset>
   <fieldset><legend>Failure tiles</legend>
-    <label class="flabel" for="pref-group">Group by</label>
-    <select id="pref-group" data-pref="group">
-      <option value="cluster">Cluster</option>
-      <option value="cat">Verdict</option>
-      <option value="state">Review status</option>
-    </select>
-    <label class="flabel" for="pref-tile" style="margin-top:0.8rem">Tile size</label>
-    <select id="pref-tile" data-pref="tile">
-      <option value="auto">Automatic</option>
-      <option value="16">Small</option>
-      <option value="28">Medium</option>
-      <option value="44">Large</option>
-      <option value="64">Extra large</option>
-    </select>
-    <label class="check" style="margin-top:0.8rem"><input type="checkbox" data-pref="marks">
-      <span>Mark each verdict with a letter<small>P product bug, T test bug, F flaky, E environment, D test data. Helps if colours are hard to tell apart.</small></span></label>
   </fieldset>
   <fieldset><legend>Panels</legend>
     <div class="actions" style="margin:0 0 0.7rem">
@@ -560,7 +534,7 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
 <script>
 (function () {
   var KEY = "tessella-prefs-v2";
-  var DEF = { theme: "auto", text: "m", density: "comfortable", marks: false, group: "cluster",
+  var DEF = { theme: "auto", text: "m", density: "comfortable", 
               tile: "auto", hidden: [], order: [], refresh: false, tab: "run", sizes: {}, collapsed: [],
               fview: "table" };
   var root = document.documentElement;
@@ -569,7 +543,6 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
   var panels = Array.prototype.slice.call(grid.querySelectorAll(".panel"));
   var ids = panels.map(function (p) { return p.getAttribute("data-panel"); });
   var cfg = load();
-  var filters = { cat: [], state: [] };
   var timer = null;
 
   function load() {
@@ -613,72 +586,13 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
     });
   }
 
-  /* the mosaic: regroup, size, filter */
-  var catOrder = ["product_bug", "test_bug", "flaky", "environment", "test_data", "unknown", "none"];
-  var stateOrder = ["open", "approved", "rejected"];
-  var stateLabel = { open: "Waiting", approved: "Approved", rejected: "Rejected" };
   function plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }
-  function regroup() {
-    var m = document.getElementById("mosaic");
-    if (!m) return;
-    var tiles = Array.prototype.slice.call(m.querySelectorAll(".tile"));
-    var by = cfg.group, groups = {}, keys = [];
-    tiles.forEach(function (t) {
-      var k = by === "cat" ? t.getAttribute("data-cat") : by === "state" ? t.getAttribute("data-state") : t.getAttribute("data-cluster");
-      if (!groups[k]) { groups[k] = []; keys.push(k); }
-      groups[k].push(t);
-    });
-    if (by === "cat") keys.sort(function (a, b) { return catOrder.indexOf(a) - catOrder.indexOf(b); });
-    else if (by === "state") keys.sort(function (a, b) { return stateOrder.indexOf(a) - stateOrder.indexOf(b); });
-    else keys.sort(function (a, b) { return groups[b].length - groups[a].length; });
-    while (m.firstChild) m.removeChild(m.firstChild);
-    var i = 0;
-    keys.forEach(function (k) {
-      var g = groups[k], n = g.length;
-      var wrap = document.createElement("div"); wrap.className = "cluster";
-      wrap.style.setProperty("--cols", Math.max(1, Math.ceil(Math.sqrt(n))));
-      var box = document.createElement("div"); box.className = "tiles";
-      g.forEach(function (t) { t.style.setProperty("--i", Math.min(i++, 60)); box.appendChild(t); });
-      var cap = document.createElement("p"); cap.className = "cap";
-      var label = by === "state" ? stateLabel[k] : g[0].getAttribute("data-label");
-      cap.appendChild(document.createTextNode(label));
-      cap.appendChild(document.createElement("br"));
-      var sp = document.createElement("span"); sp.textContent = plural(n, "test"); cap.appendChild(sp);
-      wrap.appendChild(box); wrap.appendChild(cap); m.appendChild(wrap);
-    });
-    applyFilters();
-  }
-  function applyTileSize() {
-    var m = document.getElementById("mosaic");
-    if (!m) return;
-    var px = cfg.tile === "auto" ? +m.getAttribute("data-auto") : +cfg.tile;
-    m.style.setProperty("--tile", px + "px");
-    if (px < 28) m.setAttribute("data-small", ""); else m.removeAttribute("data-small");
-  }
-  function applyFilters() {
-    var any = filters.cat.length || filters.state.length;
-    Array.prototype.forEach.call(document.querySelectorAll(".mosaic .tile"), function (t) {
-      var ok = (!filters.cat.length || filters.cat.indexOf(t.getAttribute("data-cat")) >= 0) &&
-               (!filters.state.length || filters.state.indexOf(t.getAttribute("data-state")) >= 0);
-      t.classList.toggle("dim", any && !ok);
-    });
-  }
-  Array.prototype.forEach.call(document.querySelectorAll(".chip"), function (c) {
-    c.addEventListener("click", function () {
-      var list = filters[c.getAttribute("data-filter")], v = c.getAttribute("data-value");
-      var at = list.indexOf(v);
-      if (at >= 0) list.splice(at, 1); else list.push(v);
-      c.setAttribute("aria-pressed", at < 0 ? "true" : "false");
-      applyFilters();
-    });
-  });
 
   /* look and feel */
   function applyLook() {
     if (cfg.theme === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", cfg.theme);
     root.setAttribute("data-text", cfg.text);
     root.setAttribute("data-density", cfg.density);
-    document.body.classList.toggle("marks", !!cfg.marks);
   }
   function applyRefresh() {
     clearTimeout(timer);
@@ -689,12 +603,9 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
       var r = document.querySelector('input[name="' + k + '"][value="' + cfg[k] + '"]');
       if (r) r.checked = true;
     });
-    document.getElementById("pref-group").value = cfg.group;
-    document.getElementById("pref-tile").value = cfg.tile;
-    document.querySelector('[data-pref="marks"]').checked = !!cfg.marks;
     document.querySelector('[data-pref="refresh"]').checked = !!cfg.refresh;
   }
-  function applyAll() { applyLook(); applyPanels(); applyTileSize(); applyRefresh(); syncControls(); applyFview(); }
+  function applyAll() { applyLook(); applyPanels(); applyRefresh(); syncControls(); applyFview(); }
 
   /* controls */
   var dlg = document.getElementById("prefs");
@@ -707,17 +618,13 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
   document.getElementById("done-prefs").addEventListener("click", closeDlg);
   dlg.addEventListener("click", function (e) { if (e.target === dlg) closeDlg(); });
   document.getElementById("reset-prefs").addEventListener("click", function () {
-    var regroupNeeded = cfg.group !== DEF.group;
-    cfg = Object.assign({}, DEF); save(); applyAll(); if (regroupNeeded) regroup();
+    cfg = Object.assign({}, DEF); save(); applyAll();
   });
   ["theme", "text", "density"].forEach(function (k) {
     Array.prototype.forEach.call(document.querySelectorAll('input[name="' + k + '"]'), function (r) {
       r.addEventListener("change", function () { cfg[k] = r.value; save(); applyLook(); });
     });
   });
-  document.getElementById("pref-group").addEventListener("change", function (e) { cfg.group = e.target.value; save(); regroup(); });
-  document.getElementById("pref-tile").addEventListener("change", function (e) { cfg.tile = e.target.value; save(); applyTileSize(); });
-  document.querySelector('[data-pref="marks"]').addEventListener("change", function (e) { cfg.marks = e.target.checked; save(); applyLook(); });
   document.querySelector('[data-pref="refresh"]').addEventListener("change", function (e) { cfg.refresh = e.target.checked; save(); applyRefresh(); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-show]"), function (cb) {
     cb.addEventListener("change", function () {
@@ -874,8 +781,8 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
     if (current !== id || !detail.open) openCase(id);
     pendingDecision = { id: id, action: action, reason: reason };
     document.getElementById("decide-q").textContent = action === "approve"
-      ? "File this ticket to the board?" : "Reject this failure as " + (REASONS[reason] || reason) + "? Nothing is filed.";
-    document.getElementById("decide-yes").textContent = action === "approve" ? "Approve and file" : "Reject";
+      ? "File this ticket to the board?" : "Mark this failure as " + (REASONS[reason] || reason) + "? Nothing is filed.";
+    document.getElementById("decide-yes").textContent = action === "approve" ? "Approve and file" : "Submit";
     document.getElementById("decide-err").hidden = true;
     var bar = document.getElementById("decide-bar"); bar.hidden = false;
     document.getElementById("decide-yes").disabled = false;
@@ -894,10 +801,10 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
     fetch("/cases/" + encodeURIComponent(d.id) + "/decide",
           { method: "POST", body: form, redirect: "manual", credentials: "same-origin" })
       .then(function (r) {
-        if (r.type === "opaqueredirect" || r.ok) { location.reload(); return; }
+        if (r.type === "opaqueredirect" || r.ok) { goNext(d.id); return; }
         if (r.status === 403) { fail("This page is out of date. Reload it and try again."); return; }
-        return r.text().then(function (t) { fail(t || "The queue answered " + r.status + "."); });
-      }, function () { fail("Could not reach the review queue."); });
+        return r.text().then(function (t) { fail(t || "The server answered " + r.status + "."); });
+      }, function () { fail("Could not reach Tessella on this machine."); });
   });
   var draggedCard = null, drops = Array.prototype.slice.call(document.querySelectorAll(".drop"));
   Array.prototype.forEach.call(document.querySelectorAll('.card[draggable="true"]'), function (c) {
@@ -976,8 +883,79 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
   }
   function seconds(s) { return s == null ? null : s < 90 ? Math.round(s) + " seconds" : (s / 60).toFixed(1) + " minutes"; }
   function listed() {
-    return Array.prototype.filter.call(document.querySelectorAll(".mosaic .tile[data-case]"), function (t) { return !t.classList.contains("dim") && data[t.getAttribute("data-case")]; })
+    return Array.prototype.filter.call(document.querySelectorAll("tr[data-case]"), function (t) { return data[t.getAttribute("data-case")]; })
       .map(function (t) { return t.getAttribute("data-case"); });
+  }
+  var TICKET = [["title", "Title", "title", "title"], ["description", "Description", "textarea", "description"], ["steps", "Steps to reproduce", "textarea", "steps_to_reproduce"],
+                ["actual", "Actual result", "textarea", "actual_result"], ["expected", "Expected result", "textarea", "expected_result"],
+                ["environment", "Environment", "textarea", "environment"], ["root_cause", "Root cause (suspected)", "textarea", "root_cause"], ["fix", "Suggested fix", "textarea", "suggested_fix"]];
+  var CHOICES = [["flaky", "Flaky test, no ticket needed"], ["environment", "Environment problem"], ["test_data", "Test data problem"],
+                 ["test_bug", "Test bug, no ticket needed"], ["not_a_bug", "Not a bug"], ["duplicate", "Duplicate of an existing ticket"]];
+  var boardName = {{board_json}};
+  /* after a decision, straight to the next failure that needs a person */
+  function goNext(done) {
+    var lead = (data[done] || {}).lead || done, order = listed();
+    var after = order.slice(order.indexOf(done) + 1).concat(order);
+    var next = after.filter(function (x) { return data[x].state === "open" && (data[x].lead || x) !== lead; })[0];
+    history.replaceState(null, "", next ? "#case-" + next : location.pathname);
+    location.reload();
+  }
+  function send(id, route, fields, after) {
+    var form = new URLSearchParams(fields); form.set("csrf", csrf);
+    return fetch("/cases/" + encodeURIComponent(id) + "/" + route, { method: "POST", body: form, redirect: "manual", credentials: "same-origin" })
+      .then(function (r) {
+        if (r.type === "opaqueredirect" || r.ok) { if (after) after(); else { history.replaceState(null, "", "#case-" + id); location.reload(); } return null; }
+        if (r.status === 403) return "This page is out of date. Reload it and try again.";
+        return r.text().then(function (t) { return t || "The server answered " + r.status + "."; });
+      }, function () { return "Could not reach Tessella on this machine."; });
+  }
+  function decisionPanel(c, id) {
+    if (!(live && csrf)) {
+      body.appendChild(el("p", "This saved report is read-only. To decide, run tessella review with this CI run's link."));
+      return;
+    }
+    var lead = c.lead || id, box = el("div", null, "decision"), label = el("label", "Your decision");
+    var select = el("select"); select.id = "decision-select"; label.htmlFor = select.id;
+    var rec = { flaky: 1, environment: 1, test_data: 1 }[c.category] ? c.category : "";
+    if (!c.draft && !rec) select.appendChild(new Option("Choose…", ""));
+    select.appendChild(new Option(!c.draft ? "It is a bug: write a ticket" : c.category === "flaky" ? "File this ticket" : "Real bug: file this ticket", c.draft ? "approve" : "write"));
+    CHOICES.forEach(function (o) { select.appendChild(new Option(o[1] + (o[0] === rec ? " (suggested)" : ""), o[0])); });
+    select.value = c.draft ? "approve" : rec;
+    var go = el("button"); go.type = "button"; var err = el("p", null, "err"); err.hidden = true;
+    function sync() {
+      var v = select.value; go.disabled = !v;
+      go.textContent = v === "approve" ? (boardName ? "Approve and file" : "Approve") : v === "write" ? "Write the ticket" : "Submit";
+    }
+    select.addEventListener("change", sync); sync();
+    go.addEventListener("click", function () {
+      var v = select.value; if (!v) return;
+      go.disabled = true; go.textContent = v === "approve" && boardName ? "Filing…" : "Saving…";
+      var done = v === "write"
+        ? send(lead, "draft", {}, function () { history.replaceState(null, "", "#edit-" + lead); location.reload(); })
+        : send(lead, "decide", v === "approve" ? { action: "approve" } : { action: "reject", reason: v }, function () { goNext(id); });
+      done.then(function (problem) { if (problem) { err.textContent = problem; err.hidden = false; sync(); } });
+    });
+    var row = el("div", null, "row"); row.appendChild(select); row.appendChild(go);
+    box.appendChild(label); box.appendChild(row); box.appendChild(err); body.appendChild(box);
+  }
+  function editForm(c, id) {
+    var view = document.getElementById("ticket-view"); if (!view) return;
+    var lead = c.lead || id, form = el("form", null, "edit"); form.id = "ticket-edit";
+    TICKET.forEach(function (f) {
+      var l = el("label", f[1]), field = f[2] === "title" ? el("input") : el("textarea");
+      field.name = f[3]; field.value = c.draft[f[0]] || ""; if (f[2] === "title") { field.maxLength = 255; field.required = true; }
+      l.appendChild(field); form.appendChild(l);
+    });
+    var row = el("div", null, "row"), save_ = el("button", "Save changes", "primary"), cancel = el("button", "Cancel"), note = el("span", "Saving files nothing. You still decide above.");
+    save_.type = "submit"; cancel.type = "button"; note.style.fontSize = "0.82rem";
+    row.appendChild(save_); row.appendChild(cancel); row.appendChild(note); form.appendChild(row);
+    cancel.addEventListener("click", function () { openCase(id); });
+    form.addEventListener("submit", function (e) {
+      e.preventDefault(); save_.disabled = true;
+      var fields = {}; TICKET.forEach(function (f) { fields[f[3]] = form.elements[f[3]].value; });
+      send(lead, "edit", fields).then(function (problem) { if (problem) { note.textContent = problem; save_.disabled = false; } });
+    });
+    view.replaceWith(form); var first = form.querySelector("textarea"); if (first) first.focus();
   }
   function openCase(id) {
     var c = data[id]; if (!c) return false;
@@ -987,52 +965,51 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
     pills.appendChild(el("span", c.verdict + (c.confidence != null ? ", " + Math.round(c.confidence * 100) + "% sure" : ""), "pill"));
     pills.appendChild(el("span", { open: "Waiting for review", approved: "Approved", rejected: "Rejected" + (c.reason ? " as " + c.reason.replace(/_/g, " ") : "") }[c.state], "pill"));
     body.appendChild(pills);
-    var asTicket = c.draft && c.state === "open";  // the ticket below already says all this
-    if (c.root_cause && !asTicket) { section("Suspected cause"); body.appendChild(el("p", c.root_cause)); }
-    if ((c.actual || c.expected) && !asTicket) { section("What happened and what should have"); if (c.actual) body.appendChild(el("p", "Actual: " + c.actual)); if (c.expected) body.appendChild(el("p", "Expected: " + c.expected)); }
-    if (c.fix && !asTicket) { section("Suggested fix"); body.appendChild(el("p", c.fix)); }
-    if (c.draft && c.state === "open") {
-      section("The ticket approving would file");
-      var tk = el("div", null, "ticket"); var keep = body; body = tk;
-      body.appendChild(el("h3", c.draft.title));
-      [["Description", c.draft.description], ["Steps to reproduce", c.draft.steps], ["Actual result", c.draft.actual],
-       ["Expected result", c.draft.expected], ["Environment", c.draft.environment],
-       ["Root cause (suspected)", c.draft.root_cause], ["Suggested fix", c.draft.fix]].forEach(function (f) {
-        if (!f[1]) return; body.appendChild(el("p", null)).appendChild(el("b", f[0] + ": ")); body.lastChild.appendChild(document.createTextNode(f[1]));
+    if (c.reopened) body.appendChild(el("p", "Re-opened: you " + c.reopened + ", but new evidence changed the verdict.", "todo"));
+    if (c.todo && c.state === "open") body.appendChild(el("p", c.todo, "todo"));
+    if (c.state === "open") decisionPanel(c, id);
+    var ticketShown = false;
+    if (c.draft) {
+      var head = el("div", null, "tools"); head.appendChild(el("h3", c.state === "open" ? "The ticket" : "The ticket draft"));
+      var acts = el("div", null, "actions-r");
+      if (c.allure) { var al = el("a", "Open in Allure", "link"); al.href = c.allure; al.target = "_blank"; al.rel = "noopener"; acts.appendChild(al); }
+      if (live && csrf && c.state === "open") {
+        if (c.draft.changed.length) { var undo = el("button", "Undo my edits"); undo.type = "button"; undo.addEventListener("click", function () { send(c.lead || id, "undo-edits", {}); }); acts.appendChild(undo); }
+        var edit = el("button", "Edit"); edit.type = "button"; edit.addEventListener("click", function () { editForm(c, id); }); acts.appendChild(edit);
+      }
+      head.appendChild(acts); body.appendChild(head);
+      var dl = el("dl", null, "ticket"); dl.id = "ticket-view";
+      TICKET.forEach(function (f) {
+        var dt = el("dt", f[1]); if (c.draft.changed.indexOf(f[3]) >= 0) dt.appendChild(el("span", "edited", "changed"));
+        dl.appendChild(dt); dl.appendChild(el("dd", c.draft[f[0]] || "Not available"));
       });
-      if (c.draft.screenshots) body.appendChild(el("p", c.draft.screenshots + " screenshot(s) attached, redacted before upload."));
-      if (c.draft.duplicates && c.draft.duplicates.length) body.appendChild(el("p", "Possible duplicate of " + c.draft.duplicates.join(", ")));
-      body = keep; body.appendChild(tk);
+      if (c.draft.duplicates && c.draft.duplicates.length) { dl.appendChild(el("dt", "Possible duplicate of")); dl.appendChild(el("dd", c.draft.duplicates.join(", "))); }
+      body.appendChild(dl);
+      if (c.draft.patch) { section("Proposed fix (" + c.draft.patch_status + ")"); body.appendChild(el("pre", c.draft.patch)); }
+      ticketShown = true;
+    } else {
+      if (c.allure) { var a2 = el("a", "Open in Allure", "link"); a2.href = c.allure; a2.target = "_blank"; a2.rel = "noopener"; body.appendChild(a2); }
+      if (c.root_cause) { section("Why Tessella thinks so"); body.appendChild(el("p", c.root_cause)); }
     }
-    section("The failure");
-    if (c.message) body.appendChild(el("pre", c.message));
-    if (c.stack) body.appendChild(el("pre", c.stack));
-    if (c.evidence.length) {
-      section("Evidence");
-      var ul = el("ul", null, "ev");
-      c.evidence.forEach(function (e) { var li = el("li", e.summary, e.cited ? "cited" : ""); li.appendChild(el("small", e.kind + (e.ref ? ", " + e.ref : "") + (e.cited ? ", cited by the verdict" : ""))); ul.appendChild(li); });
-      body.appendChild(ul);
+    if (c.images && live) {
+      section("Screenshots");
+      var shots = el("div", null, "shots");
+      for (var n = 0; n < c.images; n++) { var la = el("a"); la.href = "/cases/" + encodeURIComponent(id) + "/image/" + n; la.target = "_blank"; var im = el("img"); im.loading = "lazy"; im.alt = "Screenshot " + (n + 1); im.src = la.href; la.appendChild(im); shots.appendChild(la); }
+      body.appendChild(shots);
     }
-    if (c.todo) { section("What to do"); body.appendChild(el("p", c.todo)); }
-    if (live && csrf && c.state === "open") {
-      section("Decide");
-      var row = el("div", null, "choices"), lead = c.lead || id;
-      var picks = [];
-      if (c.draft) picks.push(["approve", "", "Approve and file"]);
-      var rec = { flaky: "flaky", environment: "environment", test_data: "test_data", test_bug: "test_bug" }[c.category];
-      if (rec && !c.draft) picks.push(["reject", rec, "Reject as " + REASONS[rec].replace(/^an? /, "") + " (suggested)"]);
-      ["duplicate", "not_a_bug", "test_bug", "flaky", "environment", "test_data"].forEach(function (r) {
-        if (r !== rec || c.draft) picks.push(["reject", r, "Reject as " + REASONS[r].replace(/^an? /, "")]);
-      });
-      picks.forEach(function (pk, k) {
-        var b = el("button", pk[2], k === 0 ? "primary" : ""); b.type = "button";
-        b.addEventListener("click", function () { decideCase(lead, pk[0], pk[1], !!c.draft); });
-        row.appendChild(b);
-      });
-      body.appendChild(row);
-    } else if (c.state === "open" && !live) {
-      section("Decide");
-      body.appendChild(el("p", "Decide it in the review queue (tessella queue), or open this report from there."));
+    if (!ticketShown || c.message) {
+      section("The failure");
+      if (c.message) body.appendChild(el("pre", c.message));
+    }
+    if (c.stack || c.evidence.length) {
+      var more = el("details", null, "more"); more.appendChild(el("summary", "Evidence and stack"));
+      if (c.stack) more.appendChild(el("pre", c.stack));
+      if (c.evidence.length) {
+        var ul = el("ul", null, "ev");
+        c.evidence.forEach(function (e) { var li = el("li", e.summary, e.cited ? "cited" : ""); li.appendChild(el("small", e.kind + (e.cited ? ", cited by the verdict" : ""))); ul.appendChild(li); });
+        more.appendChild(ul);
+      }
+      body.appendChild(more);
     }
     section("Where it stands");
     facts([
@@ -1069,12 +1046,18 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
     row.scrollIntoView({ block: "center" }); row.classList.add("flash"); setTimeout(function () { row.classList.remove("flash"); }, 1600);
   });
   document.addEventListener("click", function (e) {
-    var t = e.target.closest && e.target.closest("a.tile[data-case], tr[data-case], .card[data-case]");
+    var t = e.target.closest && e.target.closest("tr[data-case], .card[data-case]");
     if (!t || (e.target.closest && e.target.closest("tr a, .card a, .card button"))) return;
-    if (t.tagName === "TR" && !e.target.closest(".test")) return;
     if (t.classList.contains("card") && !e.target.closest(".ct, .thumb")) return;
     if (openCase(t.getAttribute("data-case"))) e.preventDefault();
   });
+
+  /* a link to one failure: from the email, or the next one after a decision */
+  (function () {
+    var m = /^#(case|edit)-(.+)$/.exec(location.hash); if (!m) return;
+    var id = decodeURIComponent(m[2]);
+    if (openCase(id) && m[1] === "edit" && data[id].draft) editForm(data[id], id);
+  })();
 
   /* tooltip */
   var tip = document.getElementById("tip");
@@ -1127,9 +1110,7 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
   }
 
   /* start */
-  Array.prototype.forEach.call(document.querySelectorAll(".mosaic .tile"), function (t, i) { t.style.setProperty("--i", Math.min(i, 60)); });
   applyAll();
-  if (cfg.group !== "cluster") regroup();
 })();
 </script>
 </body>
