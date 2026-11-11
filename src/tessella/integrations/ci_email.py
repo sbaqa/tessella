@@ -35,11 +35,23 @@ def subject(d: dict, ctx: dict) -> str:
 
 
 def review_url(row: dict, run: str | None, queue: str | None) -> str | None:
-    """Where a failure's Review button goes: a team's queue, or the queue on this laptop."""
-    if not row.get("open") or not (run or queue):
+    """A team's own dashboard, when it has one. A laptop's localhost is no link for an email."""
+    if not row.get("open") or not queue:
         return None
-    base = (queue or "http://127.0.0.1:8484").rstrip("/")
-    return f"{base}/review?run={quote(run or '', safe='')}&case={quote(row['case_id'], safe='')}"
+    return f"{queue.rstrip('/')}/review?run={quote(run or '', safe='')}&case={quote(row['case_id'], safe='')}"
+
+
+def _links_for(row: dict, run: str | None, queue: str | None, drafts: str | None) -> list[tuple[str, str]]:
+    """The buttons under one failure: read its draft, decide on a team's dashboard, see its ticket."""
+    out = []
+    if drafts and row.get("open"):
+        out.append(("Open draft", f"{drafts}#case-{row['case_id']}"))
+    review = review_url(row, run, queue)
+    if review:
+        out.append(("Decide", review))
+    if row.get("ticket_url"):
+        out.append((f"Open {row.get('ticket_key') or 'ticket'}", row["ticket_url"]))
+    return out
 
 
 def _short(text: str, limit: int = 400) -> str:
@@ -47,7 +59,8 @@ def _short(text: str, limit: int = 400) -> str:
     return line if len(line) <= limit else line[:limit - 1] + "…"
 
 
-def text_body(d: dict, ctx: dict, links: list[tuple[str, str]], run: str | None = None) -> str:
+def text_body(d: dict, ctx: dict, links: list[tuple[str, str]], run: str | None = None,
+              drafts: str | None = None) -> str:
     """The plain-text part, for mail clients that do not show HTML."""
     lines = [d["headline"] or "Tessella run summary", ""]
     where = [v for v in (ctx.get("repo"), ctx.get("change"), ctx.get("branch"), ctx.get("commit")) if v]
@@ -58,14 +71,16 @@ def text_body(d: dict, ctx: dict, links: list[tuple[str, str]], run: str | None 
     if links:
         lines += ["REPORTS", *[f"  {name}: {url}" for name, url in links], ""]
     if run and any(r.get("open") for r in d["rows"]):
-        lines += ["REVIEW ON YOUR MACHINE", f"  tessella review {run}", ""]
+        lines += ["DECIDE ON YOUR MACHINE", f"  tessella review {run}", ""]
     if d["rows"]:
         lines.append("FAILURES")
     for r in d["rows"]:
         lines += [f"* {r['title']}", f"  Verdict: {r['verdict']}", f"  Cause: {_short(r['cause'])}"]
         if r["fix"]:
             lines.append(f"  Suggested fix: {_short(r['fix'])}")
-        lines += [f"  Board: {_short(r['board'])}", ""]
+        lines += [f"  Board: {_short(r['board'])}"]
+        lines += [f"  {name}: {url}" for name, url in _links_for(r, run, d.get("queue_url"), drafts)]
+        lines.append("")
     if d["more"]:
         lines += [f"And {d['more']} more failures: see the full report.", ""]
     lines.append("Nothing is filed to the board without a person approving it.")
@@ -80,7 +95,7 @@ def _field(name: str, value: str) -> str:
             f'color:#121920">{escape(_short(value))}</td></tr>')
 
 
-def _failure(r: dict, review: str | None) -> str:
+def _failure(r: dict, buttons: list[tuple[str, str]]) -> str:
     hue = _HUE.get(r["category"], "#7d8791")
     label = _LABEL.get(r["category"], r["verdict"]) if r["category"] not in ("none", "filed") else r["verdict"]
     tests = len(r["tests"])
@@ -95,7 +110,7 @@ def _failure(r: dict, review: str | None) -> str:
 <div style="font-size:12px;font-weight:700;color:{hue}">{escape(label)}{count}</div>
 <div style="font-size:15px;font-weight:600;color:#121920;padding:2px 0 8px;word-break:break-word">{escape(_short(r['title'], 140))}</div>
 <table role="presentation" cellpadding="0" cellspacing="0">{fields}</table>
-{_button("Review this failure", review, True) if review else ""}
+<div style="padding-top:8px">{"".join(_button(n, u, i == 0) for i, (n, u) in enumerate(buttons))}</div>
 </td></tr></table></td></tr>"""
 
 
@@ -106,7 +121,8 @@ def _button(name: str, url: str, first: bool) -> str:
             f'font-weight:600;text-decoration:none">{escape(name)}</a>')
 
 
-def html_body(d: dict, ctx: dict, links: list[tuple[str, str]], run: str | None = None) -> str:
+def html_body(d: dict, ctx: dict, links: list[tuple[str, str]], run: str | None = None,
+              drafts: str | None = None) -> str:
     where = " &middot; ".join(escape(v) for v in (ctx.get("repo"), ctx.get("change"), ctx.get("branch"), ctx.get("commit")) if v)
     tiles = "".join(
         f'<td style="padding:0 16px 0 0;font-size:13px;color:#46525d"><b style="font-size:20px;'
@@ -116,10 +132,10 @@ def html_body(d: dict, ctx: dict, links: list[tuple[str, str]], run: str | None 
     buttons = "".join(_button(n, u, i == 0) for i, (n, u) in enumerate(links))
     reports = (f'<h2 style="margin:18px 0 8px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;'
                f'color:#6b7680">Reports</h2><div>{buttons}</div>') if links else ""
-    failures = "".join(_failure(r, review_url(r, run, d.get("queue_url"))) for r in d["rows"])
+    failures = "".join(_failure(r, _links_for(r, run, d.get("queue_url"), drafts)) for r in d["rows"])
     decide = (f'<h2 style="margin:18px 0 8px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;'
-              f'color:#6b7680">Review on your machine</h2><p style="margin:0 0 6px;font-size:13px;color:#46525d">'
-              f'Run this once, then the Review buttons below open each failure.</p>'
+              f'color:#6b7680">Decide on your machine</h2><p style="margin:0 0 6px;font-size:13px;color:#46525d">'
+              f'Read a draft from the buttons below. To approve or reject, run:</p>'
               f'<code style="display:block;padding:9px 11px;background:#eef1f4;border-radius:6px;font-size:12px;'
               f'color:#121920;word-break:break-all">tessella review {escape(run)}</code>'
               if run and not d.get("queue_url") and any(r.get("open") for r in d["rows"]) else "")

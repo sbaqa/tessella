@@ -10,6 +10,7 @@
 - `tessella notify`: a structured email, the PR comment and the CI Summary page, each with direct links to the reports stored on the CI run.
 
 - `tessella review`: download a CI run from GitHub, GitLab, Azure DevOps, Jenkins or CircleCI (or open a downloaded file), merge it and open the queue. Each failure in the email has a Review button.
+- `tessella drafts`: one plain page with every ticket draft, published with the run. Each failure in the email and PR comment links to its draft, and filed failures link to their ticket.
 - `tessella snapshot`: the database and screenshots as one folder for a CI artifact.
 - Decisions are written to `tessella-decisions.jsonl` for you to commit, so CI and teammates know them.
 - A rejected failure that returns with new evidence is judged again by the local model, and comes back only if the verdict changes.

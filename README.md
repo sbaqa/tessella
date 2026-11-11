@@ -1010,7 +1010,8 @@ and `models.vision` yourself.
 | `tessella ci [REPORTS...]` | Triage inside a pipeline, print one summary, always exit 0 so Tessella never fails your build. Options: `--comment` (post the summary on the PR/MR, see [Running in CI](#running-in-ci)), `--queue-url`, `--no-rerun`, `--no-model`, `--minutes`, `--digest` |
 | `tessella review [LINK or FILE]` | Bring a CI run's results here and open the dashboard. Options: `--case`, `--port`, `--no-open` |
 | `tessella snapshot [FOLDER]` | Copy the database and screenshots into one folder for CI to publish as the `tessella-db` artifact |
-| `tessella notify DIGEST` | Send a CI run's findings with links to its reports: PR/MR comment, email, CI Summary page. Options: `--link NAME=URL`, `--comment`, `--email`, `--email-to`, `--smtp-host`, `--smtp-port`, `--email-from` |
+| `tessella drafts DIGEST` | Write one plain page with every ticket draft of a CI run, for CI to publish next to its reports. Options: `--out`, `--link` |
+| `tessella notify DIGEST` | Send a CI run's findings with links to its reports: PR/MR comment, email, CI Summary page. Options: `--link NAME=URL`, `--drafts-url`, `--comment`, `--email`, `--email-to`, `--smtp-host`, `--smtp-port`, `--email-from` |
 | `tessella queue` | Open the dashboard on `http://localhost:8484`; the live dashboard is at `/report`. Options: `--port`, `--host` (beyond loopback needs `team.reviewers`), `--tls-cert`/`--tls-key` for HTTPS |
 | `tessella report` | Write an offline HTML dashboard to `.tessella/report.html`: failures as tiles, the funnel to tickets, reviewer agreement, evidence quality, model calls and run history. Options: `--out PATH`, `--open`, `--view full\|management`, `--config` |
 | `tessella calibrate [SIGNATURE]` | Time a manual investigation on a raw failure (no verdict shown) so the time-saved figure rests on your team's own numbers. Options: `--minutes N` to import a time you already know, `--no-ticket` if it did not end in a ticket, `--note`, `--list`, `--config` |
@@ -1228,7 +1229,8 @@ tessella review https://github.com/acme/app/actions/runs/123
 ```
 
 It downloads the `tessella-db` artifact, merges it into your local database, starts the review
-queue and opens your browser. Each failure's **Review** button in the email then opens that card.
+queue and opens your browser. To read first, each failure in the email has **Open draft**: the full ticket
+on a plain page published with the run (`tessella drafts`, then `tessella notify --drafts-url`).
 A run link needs a token from the environment, used only for that provider:
 
 | CI | Link it reads | Token |

@@ -153,6 +153,28 @@ runs:
         path: ${{ inputs.working-directory }}/tessella-report.html
         archive: false
 
+    # One plain page with every draft, so a link from the email opens a draft on the CI run.
+    - name: Build the ticket drafts page
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CONFIG: ${{ inputs.config }}
+        REPORT_URL: ${{ steps.report.outputs.artifact-url }}
+        LINKS: ${{ inputs.links }}
+      run: |
+        [ -f .tessella/ci-digest.json ] || exit 0
+        args=(drafts .tessella/ci-digest.json --config "$CONFIG" -o tessella-drafts.html --link "Tessella report=$REPORT_URL")
+        while IFS= read -r line; do [ -n "$line" ] && args+=(--link "$line"); done <<< "$LINKS"
+        "$RUNNER_TEMP/tessella/bin/tessella" "${args[@]}"
+    - id: drafts
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        path: ${{ inputs.working-directory }}/tessella-drafts.html
+        archive: false
+        if-no-files-found: ignore
+
     # What `tessella review` fetches. The cache above is CI's own memory and cannot be downloaded.
     - name: Publish the results for review
       if: always()
@@ -177,6 +199,7 @@ runs:
         CONFIG: ${{ inputs.config }}
         COMMENT: ${{ inputs.comment }}
         REPORT_URL: ${{ steps.report.outputs.artifact-url }}
+        DRAFTS_URL: ${{ steps.drafts.outputs.artifact-url }}
         LINKS: ${{ inputs.links }}
         EMAIL_TO: ${{ inputs.email-to }}
         EMAIL_FROM: ${{ inputs.email-from }}
@@ -188,6 +211,7 @@ runs:
         [ -f .tessella/ci-digest.json ] || exit 0
         args=(notify .tessella/ci-digest.json --config "$CONFIG" --link "Tessella report=$REPORT_URL")
         while IFS= read -r line; do [ -n "$line" ] && args+=(--link "$line"); done <<< "$LINKS"
+        [ -n "$DRAFTS_URL" ] && args+=(--drafts-url "$DRAFTS_URL")
         [ "$COMMENT" = "true" ] && args+=(--comment)
         if [ -n "$EMAIL_TO" ]; then
           args+=(--email --email-to "$EMAIL_TO" --smtp-host "$SMTP_HOST" --smtp-port "$SMTP_PORT")

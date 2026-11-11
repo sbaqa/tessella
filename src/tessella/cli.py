@@ -287,6 +287,30 @@ def ci(reports: list[str] = typer.Argument(None), cfg: Optional[Path] = typer.Op
 
 
 @app.command()
+def drafts(digest: Path = typer.Argument(..., help="The file tessella ci --digest wrote."),
+           out: Path = typer.Option(Path("tessella-drafts.html"), "--out", "-o"),
+           cfg: Optional[Path] = typer.Option(None, "--config", "-c"),
+           link: list[str] = typer.Option([], "--link", help="A report to link, as NAME=URL. Repeat it.")):
+    """Write one plain page with every ticket draft of a CI run, to publish next to its reports. Always exits 0."""
+    from tessella.integrations import ci_comment
+    from tessella.memory.store import Store
+    from tessella.report import drafts as page
+
+    try:
+        s = config.load(cfg)
+        run = ci_comment.run_url()
+        links = [tuple(x.split("=", 1)) for x in link if "=" in x and x.split("=", 1)[1]]
+        if run:
+            links.append(("CI run", run))
+        out.write_text(page.render(json.loads(digest.read_text(encoding="utf-8")), Store(s.storage.path),
+                                   ci_comment.context(), run, links), encoding="utf-8")
+        console.print(f"Drafts written to [bold]{out}[/]")
+    except Exception as exc:  # CI must never fail the build because of Tessella
+        console.print(f"[red]Tessella error:[/] {exc}")
+    raise typer.Exit(0)
+
+
+@app.command()
 def notify(digest: Path = typer.Argument(..., help="The file tessella ci --digest wrote."),
            cfg: Optional[Path] = typer.Option(None, "--config", "-c"),
            link: list[str] = typer.Option([], "--link", help="A report to link, as NAME=URL. Repeat it."),
@@ -295,7 +319,8 @@ def notify(digest: Path = typer.Argument(..., help="The file tessella ci --diges
            email_to: Optional[str] = typer.Option(None, "--email-to", help="Recipients, comma separated (default: ci.email.to)."),
            smtp_host: Optional[str] = typer.Option(None, "--smtp-host", help="SMTP server (default: ci.email.host)."),
            smtp_port: Optional[int] = typer.Option(None, "--smtp-port"),
-           email_from: Optional[str] = typer.Option(None, "--email-from")):
+           email_from: Optional[str] = typer.Option(None, "--email-from"),
+           drafts_url: Optional[str] = typer.Option(None, "--drafts-url", help="Where CI published tessella drafts' page; each failure links to its draft there.")):
     """Send a CI run's findings, with links to its reports: PR comment, email, CI summary page. Always exits 0."""
     from tessella.integrations import ci_comment
 
@@ -303,10 +328,12 @@ def notify(digest: Path = typer.Argument(..., help="The file tessella ci --diges
         s = config.load(cfg)
         d = json.loads(digest.read_text(encoding="utf-8"))
         links = [tuple(x.split("=", 1)) for x in link if "=" in x and x.split("=", 1)[1]]
+        if drafts_url:
+            links.insert(0, ("Ticket drafts", drafts_url))
         ctx, run = ci_comment.context(), ci_comment.run_url()
         all_links = [*links, *([("CI run", run)] if run else []),
                      *([(ctx["change"], ctx["change_url"])] if ctx["change_url"] else [])]
-        body = ci_comment.markdown(d, run, links)
+        body = ci_comment.markdown(d, run, links, drafts_url)
         summary_page = os.environ.get("GITHUB_STEP_SUMMARY")
         if summary_page:
             with open(summary_page, "a", encoding="utf-8") as fh:
@@ -318,13 +345,13 @@ def notify(digest: Path = typer.Argument(..., help="The file tessella ci --diges
             mail.to = [a.strip() for a in email_to.split(",") if a.strip()] if email_to else mail.to
             mail.host, mail.sender = smtp_host or mail.host, email_from or mail.sender
             mail.port = smtp_port or mail.port
-            _send_email(s, d, ctx, all_links)
+            _send_email(s, d, ctx, all_links, drafts_url)
     except Exception as exc:  # CI must never fail the build because of Tessella
         console.print(f"[red]Tessella error:[/] {exc}")
     raise typer.Exit(0)
 
 
-def _send_email(s: config.Settings, d: dict, ctx: dict, links: list) -> None:
+def _send_email(s: config.Settings, d: dict, ctx: dict, links: list, drafts: str | None = None) -> None:
     """Email the summary, or say plainly why not. Never raises."""
     from tessella import egress
     from tessella.integrations import ci_comment, ci_email
@@ -337,8 +364,8 @@ def _send_email(s: config.Settings, d: dict, ctx: dict, links: list) -> None:
         return
     try:
         run = ci_comment.run_url()
-        ci_email.send(s.ci.email, ci_email.subject(d, ctx), ci_email.text_body(d, ctx, links, run),
-                      ci_email.html_body(d, ctx, links, run), s.network.allow)
+        ci_email.send(s.ci.email, ci_email.subject(d, ctx), ci_email.text_body(d, ctx, links, run, drafts),
+                      ci_email.html_body(d, ctx, links, run, drafts), s.network.allow)
         console.print(f"Emailed {_count_of(s.ci.email.to)}.")
     except Exception as exc:  # noqa: BLE001 - an email is never worth a failed build
         console.print(f"[yellow]Could not email:[/] {exc}")

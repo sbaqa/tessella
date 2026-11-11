@@ -86,6 +86,7 @@ def digest(cases: list[Case], queue_url: str | None = None, result=None) -> dict
                          and m[0].verdict.category in _ACTIONABLE)
     for members in list(clusters.values())[:_ROWS]:
         lead, v, d = members[0], members[0].verdict, members[0].draft
+        past = getattr(result, "decisions", {}).get(lead.signature) if result is not None else None
         if lead.signature in on_board:
             verdict, category = "already filed", "filed"
         elif v:
@@ -99,6 +100,7 @@ def digest(cases: list[Case], queue_url: str | None = None, result=None) -> dict
         if not v and result is not None and lead.signature not in on_board:
             board_note = "no ticket for this failure yet" if checked else "board not checked"
         out["rows"].append({
+            "ticket_key": getattr(past, "ticket_key", None), "ticket_url": getattr(past, "ticket_url", None),
             "case_id": lead.id, "open": lead.signature not in on_board and lead.signature not in decided,
             "title": lead.title, "tests": [c.title for c in members], "verdict": verdict,
             "category": category, "cause": cause, "board": board_note,
@@ -108,12 +110,19 @@ def digest(cases: list[Case], queue_url: str | None = None, result=None) -> dict
     return out
 
 
-def _detail(row: dict) -> list[str]:
+def draft_url(row: dict, drafts: str | None) -> str | None:
+    """This failure on the run's page of ticket drafts."""
+    return f"{drafts}#case-{row['case_id']}" if drafts and row.get("open") else None
+
+
+def _detail(row: dict, drafts: str | None = None) -> list[str]:
     """A folded block for a drafted bug or a failure that hit several tests."""
     tests = row["tests"]
     if not row["actual"] and len(tests) == 1:
         return []
     out = [f"<details><summary>{_one_line(row['title'], 90)}</summary>", ""]
+    if draft_url(row, drafts):
+        out += [f"[Open draft]({draft_url(row, drafts)})", ""]
     if row["actual"]:
         out += [f"**Actual:** {_one_line(row['actual'], 300)}", "",
                 f"**Expected:** {_one_line(row['expected'], 300)}", "",
@@ -129,7 +138,8 @@ def _detail(row: dict) -> list[str]:
     return [*out, "</details>", ""]
 
 
-def markdown(d: dict, run_link: str | None = None, links: list[tuple[str, str]] | None = None) -> str:
+def markdown(d: dict, run_link: str | None = None, links: list[tuple[str, str]] | None = None,
+             drafts: str | None = None) -> str:
     """The digest as the comment GitHub or GitLab shows, and as the CI run's summary page."""
     lines = [MARKER, "### Tessella run summary", ""]
     if d["headline"]:
@@ -156,7 +166,7 @@ def markdown(d: dict, run_link: str | None = None, links: list[tuple[str, str]] 
             lines.append(row + (f" {r['seen']} |" if d["show_seen"] else ""))
         if d["more"]:
             lines.append(f"\n_And {d['more']} more failures: see the full report._")
-        details = [line for r in d["rows"][:_DETAILS] for line in _detail(r)]
+        details = [line for r in d["rows"][:_DETAILS] for line in _detail(r, drafts)]
         if details:
             lines += ["", *details]
     if d["queue_url"]:

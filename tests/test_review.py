@@ -461,20 +461,69 @@ def test_review_post_needs_the_token_then_loads(queue, monkeypatch):
     assert r.headers["location"] == "/#case-other" and loaded == [data["run"]]
 
 
-def test_email_has_a_review_button_per_open_failure():
+def _email_rows():
+    row = {"title": "t", "tests": ["t"], "verdict": "v", "category": "product_bug", "cause": "c", "board": "b",
+           "actual": "", "expected": "", "fix": "", "checked_fix": "", "case_id": "c1", "open": True,
+           "ticket_key": None, "ticket_url": None}
+    filed = {**row, "open": False, "case_id": "c2", "title": "filed", "ticket_key": "KAN-7", "ticket_url": "https://j/KAN-7"}
+    return {"headline": "h", "note": None, "counts": {"product_bug": 2}, "rows": [row, filed], "more": 0}, row
+
+
+def test_email_links_each_failure_to_its_draft_and_never_to_localhost():
     from tessella.integrations import ci_email
 
-    row = {"title": "t", "tests": ["t"], "verdict": "v", "category": "product_bug", "cause": "c", "board": "b",
-           "actual": "", "expected": "", "fix": "", "checked_fix": "", "case_id": "c1", "open": True}
-    filed = {**row, "open": False, "case_id": "c2", "title": "filed"}
-    d = {"headline": "h", "note": None, "counts": {"product_bug": 2}, "rows": [row, filed], "more": 0}
+    d, row = _email_rows()
+    run, drafts = "https://github.com/o/r/actions/runs/9", "https://github.com/o/r/actions/runs/9/artifacts/5"
+    html = ci_email.html_body(d, {}, [], run, drafts)
+    assert f'href="{drafts}#case-c1"' in html and html.count(">Open draft</a>") == 1
+    assert 'href="https://j/KAN-7"' in html and ">Open KAN-7</a>" in html
+    assert "127.0.0.1" not in html and "localhost" not in html and f"tessella review {run}" in html
+    text = ci_email.text_body(d, {}, [], run, drafts)
+    assert f"Open draft: {drafts}#case-c1" in text and "localhost" not in text and "127.0.0.1" not in text
+    assert ci_email.review_url(row, run, None) is None
+    assert ci_email.review_url(row, run, "https://tessella.lan:8484/").startswith("https://tessella.lan:8484/review?")
+
+
+def test_drafts_page_is_complete_escaped_and_has_no_scripts(tmp_path):
+    from tessella.draft.ticket import ticket
+    from tessella.report import drafts
+
+    store = Store(tmp_path / "s.sqlite")
+    case = _case()
+    case.verdict.root_cause = "<script>alert(1)</script>"
+    case.draft = ticket(case)
+    store.save_case(case)
+    bare = _case("c9", "s9", verdict=False)
+    bare.message = "boom"
+    store.save_case(bare)
+    filed = _case("c8", "s8")
+    store.save_case(filed)
+    d = {"headline": "h", "rows": [{"case_id": "c1", "open": True}, {"case_id": "c9", "open": True}, {"case_id": "c8", "open": False}]}
     run = "https://github.com/o/r/actions/runs/9"
-    html = ci_email.html_body(d, {}, [], run)
-    assert "/review?run=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Factions%2Fruns%2F9&amp;case=c1" in html
-    assert html.count("Review this failure") == 1 and f"tessella review {run}" in html
-    assert f"tessella review {run}" in ci_email.text_body(d, {}, [], run)
-    team = ci_email.review_url(row, run, "https://tessella.lan:8484/")
-    assert team.startswith("https://tessella.lan:8484/review?")
+    page = drafts.render(d, store, {"repo": "o/r"}, run, [("Allure report", "https://x/a")])
+    assert 'id="case-c1"' in page and 'id="case-c9"' in page and 'id="case-c8"' not in page
+    for label in ("Description", "Steps to reproduce", "Actual result", "Expected result", "Environment",
+                  "Root cause (suspected)", "Suggested fix"):
+        assert label in page
+    assert "<script" not in page and "&lt;script&gt;" in page and "boom" in page
+    assert f"tessella review {run} --case c1" in page and 'href="https://x/a"' in page
+
+
+def test_drafts_page_embeds_screenshots(tmp_path):
+    from PIL import Image
+
+    from tessella.draft.ticket import ticket
+    from tessella.report import drafts
+
+    shot = tmp_path / "s.png"
+    Image.new("RGB", (2000, 1000), "white").save(shot)
+    store = Store(tmp_path / "s.sqlite")
+    case = _case()
+    case.screenshots = [str(tmp_path / "missing.png"), str(shot)]
+    case.draft = ticket(case)
+    store.save_case(case)
+    page = drafts.render({"headline": "", "rows": [{"case_id": "c1", "open": True}]}, store, {}, None, [])
+    assert page.count('src="data:image/jpeg;base64,') == 1 and "tessella review --case c1" in page
 
 
 def test_each_ci_gives_its_run_link():
