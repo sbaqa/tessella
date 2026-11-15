@@ -933,9 +933,8 @@ def _badge(st: dict) -> str:
 KANBAN = ["new", "likely_on_board", "your_call", "on_board", "decided", "pending"]
 # Where a card can be dropped on the live page, and what that records. (action, reason, label)
 DROPS = [("approve", "", "Approve and file"), ("reject", "duplicate", "Duplicate"),
-         ("reject", "not_a_bug", "Not a bug"), ("reject", "test_bug", "Test bug"),
-         ("reject", "flaky", "Flaky"), ("reject", "environment", "Environment"),
-         ("reject", "test_data", "Test data")]
+         ("reject", "flaky", "Flaky test"), ("reject", "test_bug", "Test or setup problem"),
+         ("reject", "no_action", "No action needed")]
 
 
 def _kanban(data: dict, live: bool) -> str:

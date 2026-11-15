@@ -27,8 +27,10 @@
 </p>
 
 <p align="center">
-  <img src="docs/media/hero.gif" alt="Tests fail, Tessella triages them, a person reviews the ticket and its checked fix" width="880">
+  <img src="docs/media/hero.gif" alt="CI goes red, Tessella emails one summary, a draft opens with its Allure test, Jira opens prefilled, a decision is committed" width="880">
 </p>
+
+<p align="center"><a href="docs/media/tessella-story.webm"><b>▶ Watch the 50-second story</b></a>: a night of red tests, and the morning after.</p>
 
 A nightly run fails 40 tests, and someone loses a morning working out which are real bugs, which are broken tests and which are the same problem 15 times. AI could help, but in many companies logs and code may not leave the building. Tessella does that investigation **inside your network**, on a small local model, and backs every conclusion with evidence you can check.
 
@@ -83,12 +85,12 @@ Real screens from the included demo shop, on a small local model.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/media/queue.png" alt="Dashboard: one card per failure with what to do, the ticket and the evidence"><br><b>Dashboard.</b> One card per failure, with what to do next.</td>
-<td width="50%"><img src="docs/media/fix.png" alt="A ticket draft carrying a proposed fix that was checked in a copy of the project"><br><b>A checked fix on the ticket.</b> Tested before you ever see it.</td>
+<td width="50%"><img src="docs/media/queue.png" alt="Dashboard: a failure's panel with the decision and the full ticket"><br><b>Dashboard.</b> One panel per failure: the ticket, the evidence and one decision.</td>
+<td width="50%"><img src="docs/media/email.png" alt="The run's email: each failure with Open draft and Open in Allure"><br><b>Email.</b> Each failure links to its draft and its test in Allure.</td>
 </tr>
 <tr>
 <td><img src="docs/media/board.png" alt="Board view: failures in columns by status"><br><b>Board.</b> Drag a card onto a decision.</td>
-<td><img src="docs/media/report.png" alt="Report: key numbers and the failures table"><br><b>Report.</b> What this run means for the board.</td>
+<td><img src="docs/media/report.png" alt="Report: key numbers and the failures table"><br><b>This run.</b> Every failure, its status on the board and its ticket.</td>
 </tr>
 <tr>
 <td><img src="docs/media/terminal.png" alt="tessella triage output in a terminal"><br><b>Terminal.</b> One sentence on what the run means.</td>
