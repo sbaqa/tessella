@@ -10,7 +10,7 @@ import base64
 import io
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from html import escape
 from pathlib import Path
 
@@ -79,6 +79,18 @@ class Online:
     branch: str = ""
     folder: str = ""  # where decision files go, from the repository root
     at: str = ""  # when the page was made: the decision's time
+    allure_url: str = ""  # this run's single-file Allure report
+    allure_uids: dict = field(default_factory=dict)  # test name -> its id in that report
+
+
+def _allure(case: Case, online: Online | None) -> str | None:
+    """This test in the run's Allure report, to read it in full before deciding."""
+    from tessella.integrations.ci_comment import allure_uid
+
+    if online is None:
+        return None
+    uid = online.allure_uids.get(case.title) if online.allure_uids else allure_uid(case)
+    return f"{online.allure_url}#testresult/{uid}" if online and online.allure_url and uid else None
 
 
 def _jira_create(case: Case, online: Online, test_task: bool = False) -> str | None:
@@ -94,6 +106,8 @@ def _jira_create(case: Case, online: Online, test_task: bool = False) -> str | N
         return None
     # Plain text: Jira's create page shows wiki or Markdown marks literally.
     fields = "\n\n".join(f"{label}:\n{getattr(d, name) or 'Not available'}" for label, name in _FIELDS)
+    if _allure(case, online):
+        fields += f"\n\nAllure report for this test:\n{_allure(case, online)}"
     summary = f"[test fix] {case.title}" if test_task else d.title
     if test_task:
         fields = ("The code looks fine: the test, its data or its environment needs fixing.\n\n" + fields)
@@ -223,7 +237,10 @@ def _section(case: Case, row: dict, run: str | None, base: str = "",
     command = f"tessella review {run} --case {case.id}" if run else f"tessella review --case {case.id}"
     return (f'<section id="case-{escape(case.id, quote=True)}" class="{escape(str(v.category) if v else "none", quote=True)}">'
             f'<div class="kind">{escape(kind)}{sure}</div><h2>{escape(title)}</h2>'
-            f'<p class="test">{escape(case.title)}</p>{body}{shots}{patch}'
+            f'<p class="test">{escape(case.title)}</p>'
+            + (f'<p><a href="{escape(_allure(case, online), quote=True)}" target="_blank" rel="noopener">'
+               "Open this test in the Allure report</a></p>" if _allure(case, online) else "")
+            + f'{body}{shots}{patch}'
             f'<h3>Decide</h3>{_actions(case, run, base, online)}'
             f'<p class="hint">{_how(case, online)}</p>'
             f'<code class="cmd">{escape(command)}</code></section>')

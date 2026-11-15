@@ -1243,7 +1243,9 @@ Each draft there has five buttons, and none of them needs Tessella running:
 | Test or setup problem | The code is fine; the test, its data or its environment needs fixing. Opens Jira to file a `[test fix]` task |
 | No action needed | Real, but nothing to file: fixed since, or not worth fixing |
 
-Jira's pages need the action's `jira-url`, `jira-project-id` and `jira-issue-type-id` (`tessella
+Each draft, its failure in the email and its Jira description also link straight to that test in the
+run's Allure report, when the action has `allure-url` and `allure-file` (a single-file report: Allure
+gives tests new ids every time it builds one, so Tessella reads them from that file). Jira's pages need the action's `jira-url`, `jira-project-id` and `jira-issue-type-id` (`tessella
 doctor --board` prints the IDs). Recording a decision opens GitHub's new-file page with that one
 decision filled in: committing it adds it to `tessella-decisions/`, which CI and your team read.
 A run link needs a token from the environment, used only for that provider:

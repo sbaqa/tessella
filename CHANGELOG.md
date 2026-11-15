@@ -18,6 +18,7 @@
 
 - Each Open draft link shows only that draft, with buttons to approve, edit, or mark it flaky, already fixed, won't fix, not a bug, a duplicate and more. They open Tessella on your machine to confirm.
 - An approval made before a board was set up can be filed later from its panel, and any decision can be taken back.
+- Each draft, its failure in the email and the PR comment, and its Jira description link straight to that test in the run's Allure report.
 - Each draft has five buttons: Review and file in Jira, Duplicate (showing the matching ticket, or a Jira search), Flaky test, Test or setup problem (files a test-fix task in Jira) and No action needed. The dashboard offers the same choices.
 - On the drafts page, Approve opens Jira's Create page filled in, and the other decisions commit a small file through GitHub, so neither needs Tessella running. The dashboard marks a ticket created that way as filed.
 

@@ -101,6 +101,7 @@ def digest(cases: list[Case], queue_url: str | None = None, result=None) -> dict
             board_note = "no ticket for this failure yet" if checked else "board not checked"
         out["rows"].append({
             "ticket_key": getattr(past, "ticket_key", None), "ticket_url": getattr(past, "ticket_url", None),
+            "allure_uid": allure_uid(lead),
             "case_id": lead.id, "open": lead.signature not in on_board and lead.signature not in decided,
             "title": lead.title, "tests": [c.title for c in members], "verdict": verdict,
             "category": category, "cause": cause, "board": board_note,
@@ -108,6 +109,45 @@ def digest(cases: list[Case], queue_url: str | None = None, result=None) -> dict
             "actual": d.actual_result if d else "", "expected": d.expected_result if d else "",
             "fix": d.suggested_fix if d else "", "checked_fix": d.patch_status if d else ""})
     return out
+
+
+def allure_uid(case: Case) -> str | None:
+    """This test's id in the Allure report it was read from, for a link straight to it."""
+    for ev in case.evidence:
+        ref = (ev.ref or "").replace("\\", "/")
+        if ev.kind == "report" and "/test-cases/" in ref and ref.endswith(".json"):
+            return ref.rsplit("/", 1)[1][:-5]
+    return None
+
+
+def allure_uids(single_file: str | None) -> dict[str, str]:
+    """Test name -> its id inside a single-file Allure report. Allure gives every test a new id
+    each time it generates a report, so the id has to come from the very file being linked."""
+    import base64
+    import re as _re
+    from pathlib import Path
+
+    if not single_file or not Path(single_file).is_file():
+        return {}
+    out: dict[str, str] = {}
+    text = Path(single_file).read_text(encoding="utf-8", errors="replace")
+    for uid, blob in _re.findall(r"d\('data/test-cases/([0-9a-f]+)\.json','([A-Za-z0-9+/=]+)'\)", text):
+        try:
+            data = json.loads(base64.b64decode(blob))
+        except ValueError:
+            continue
+        name = data.get("fullName") or data.get("name")
+        if name and (name not in out or data.get("status") in ("failed", "broken")):
+            out[name] = uid
+    return out
+
+
+def add_allure_links(d: dict, allure: str | None, uids: dict[str, str] | None = None) -> None:
+    """Point each failure at its test in the run's Allure report (a single-file report)."""
+    for row in d["rows"]:
+        uid = (uids or {}).get(row["title"]) or (None if uids else row.get("allure_uid"))
+        if allure and uid:
+            row["allure"] = f"{allure}#testresult/{uid}"
 
 
 def draft_url(row: dict, drafts: str | None) -> str | None:
@@ -121,8 +161,10 @@ def _detail(row: dict, drafts: str | None = None) -> list[str]:
     if not row["actual"] and len(tests) == 1:
         return []
     out = [f"<details><summary>{_one_line(row['title'], 90)}</summary>", ""]
-    if draft_url(row, drafts):
-        out += [f"[Open draft]({draft_url(row, drafts)})", ""]
+    reads = [f"[{name}]({url})" for name, url in (("Open draft", draft_url(row, drafts)),
+                                                   ("Open in Allure", row.get("allure"))) if url]
+    if reads:
+        out += [" · ".join(reads), ""]
     if row["actual"]:
         out += [f"**Actual:** {_one_line(row['actual'], 300)}", "",
                 f"**Expected:** {_one_line(row['expected'], 300)}", "",

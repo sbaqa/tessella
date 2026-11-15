@@ -295,7 +295,9 @@ def drafts(digest: Path = typer.Argument(..., help="The file tessella ci --diges
            jira_url: Optional[str] = typer.Option(None, "--jira-url", help="Approve opens this Jira's Create page (default: jira.url)."),
            jira_project_id: Optional[str] = typer.Option(None, "--jira-project-id", help="Numeric project ID (default: jira.project_id; tessella doctor --board prints it)."),
            jira_issue_type_id: Optional[str] = typer.Option(None, "--jira-issue-type-id", help="Numeric issue type ID (default: jira.issue_type_id)."),
-           decisions_branch: Optional[str] = typer.Option(None, "--decisions-branch", help="On GitHub, other decisions are committed to this branch.")):
+           decisions_branch: Optional[str] = typer.Option(None, "--decisions-branch", help="On GitHub, other decisions are committed to this branch."),
+           allure_url: Optional[str] = typer.Option(None, "--allure-url", help="This run's single-file Allure report; each draft links to its test there."),
+           allure_file: Optional[Path] = typer.Option(None, "--allure-file", help="That report's file, to find each test in it.")):
     """Write one plain page with every ticket draft of a CI run, to publish next to its reports. Always exits 0."""
     from tessella.integrations import ci_comment
     from tessella.memory.store import Store
@@ -311,7 +313,9 @@ def drafts(digest: Path = typer.Argument(..., help="The file tessella ci --diges
             jira_url=jira_url or s.jira.url or "", project_id=jira_project_id or s.jira.project_id or "",
             issue_type_id=jira_issue_type_id or s.jira.issue_type_id or "",
             github=ci_comment.repo_url() or "", branch=decisions_branch or "",
-            folder=ci_comment.repo_folder(s.inputs.repo), at=datetime.now().isoformat())
+            folder=ci_comment.repo_folder(s.inputs.repo), at=datetime.now().isoformat(),
+            allure_url=allure_url or "",
+            allure_uids=ci_comment.allure_uids(str(allure_file) if allure_file else None))
         out.write_text(page.render(json.loads(digest.read_text(encoding="utf-8")), Store(s.storage.path),
                                    ci_comment.context(), run, links,
                                    s.ci.queue_url or "", online), encoding="utf-8")
@@ -331,7 +335,9 @@ def notify(digest: Path = typer.Argument(..., help="The file tessella ci --diges
            smtp_host: Optional[str] = typer.Option(None, "--smtp-host", help="SMTP server (default: ci.email.host)."),
            smtp_port: Optional[int] = typer.Option(None, "--smtp-port"),
            email_from: Optional[str] = typer.Option(None, "--email-from"),
-           drafts_url: Optional[str] = typer.Option(None, "--drafts-url", help="Where CI published tessella drafts' page; each failure links to its draft there.")):
+           drafts_url: Optional[str] = typer.Option(None, "--drafts-url", help="Where CI published tessella drafts' page; each failure links to its draft there."),
+           allure_url: Optional[str] = typer.Option(None, "--allure-url", help="This run's single-file Allure report; each failure links to its test there."),
+           allure_file: Optional[Path] = typer.Option(None, "--allure-file", help="That report's file, to find each test in it.")):
     """Send a CI run's findings, with links to its reports: PR comment, email, CI summary page. Always exits 0."""
     from tessella.integrations import ci_comment
 
@@ -341,6 +347,7 @@ def notify(digest: Path = typer.Argument(..., help="The file tessella ci --diges
         links = [tuple(x.split("=", 1)) for x in link if "=" in x and x.split("=", 1)[1]]
         if drafts_url:
             links.insert(0, ("Ticket drafts", drafts_url))
+        ci_comment.add_allure_links(d, allure_url, ci_comment.allure_uids(str(allure_file) if allure_file else None))
         ctx, run = ci_comment.context(), ci_comment.run_url()
         all_links = [*links, *([("CI run", run)] if run else []),
                      *([(ctx["change"], ctx["change_url"])] if ctx["change_url"] else [])]

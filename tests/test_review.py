@@ -756,3 +756,32 @@ def test_five_buttons_show_the_duplicate_ticket_and_file_a_test_fix(tmp_path):
     labels = __import__("re").findall(r'rel="noopener">([^<]+)</a>', two)
     assert labels == ["Review and file in Jira", "Search Jira for a duplicate", "Flaky test",
                       "Test or setup problem", "No action needed"]
+
+
+def test_each_draft_links_to_its_test_in_the_allure_report(tmp_path):
+    import html as h
+    from urllib.parse import parse_qs, urlsplit
+
+    from tessella.draft.ticket import ticket
+    from tessella.integrations import ci_comment, ci_email
+    from tessella.report import drafts
+
+    store = Store(tmp_path / "s.sqlite")
+    case = _case()
+    case.evidence = [Evidence(kind=EvidenceKind.report, summary="Allure status: failed",
+                              ref="reports/allure-report/data/test-cases/abc123.json")]
+    case.draft = ticket(case)
+    store.save_case(case)
+    allure = "https://github.com/o/r/actions/runs/9/artifacts/7"
+    online = drafts.Online(jira_url="https://acme.atlassian.net", project_id="1", issue_type_id="2",
+                           allure_url=allure)
+    page = drafts.render({"headline": "", "rows": [{"case_id": "c1", "open": True}]}, store, {}, None, [],
+                         online=online)
+    assert f'href="{allure}#testresult/abc123"' in page and "Open this test in the Allure report" in page
+    jira = next(h.unescape(x) for x in __import__("re").findall(r'href="([^"]+)"', page) if "CreateIssueDetails" in x)
+    assert f"Allure report for this test:\n{allure}#testresult/abc123" in parse_qs(urlsplit(jira).query)["description"][0]
+    d = ci_comment.digest([case])
+    assert d["rows"][0]["allure_uid"] == "abc123"
+    ci_comment.add_allure_links(d, allure)
+    assert f'href="{allure}#testresult/abc123"' in ci_email.html_body(d, {}, [], None, None)
+    assert f"[Open in Allure]({allure}#testresult/abc123)" in ci_comment.markdown(d)

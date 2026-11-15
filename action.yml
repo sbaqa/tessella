@@ -38,6 +38,12 @@ inputs:
   jira-issue-type-id:
     description: Numeric Jira issue type ID (tessella doctor --board prints it).
     default: ""
+  allure-url:
+    description: This run's single-file Allure report (the artifact-url of its upload). Each draft links to its test there.
+    default: ""
+  allure-file:
+    description: The path of that single-file report on the runner, from working-directory, so each test can be found in it.
+    default: ""
   decisions-branch:
     description: The branch a draft's other buttons commit decisions to. Default is the repository's default branch.
     default: ""
@@ -179,6 +185,8 @@ runs:
         JIRA_PROJECT_ID: ${{ inputs.jira-project-id }}
         JIRA_ISSUE_TYPE_ID: ${{ inputs.jira-issue-type-id }}
         DECISIONS_BRANCH: ${{ inputs.decisions-branch || github.event.repository.default_branch }}
+        ALLURE_URL: ${{ inputs.allure-url }}
+        ALLURE_FILE: ${{ inputs.allure-file }}
       run: |
         [ -f .tessella/ci-digest.json ] || exit 0
         args=(drafts .tessella/ci-digest.json --config "$CONFIG" -o tessella-drafts.html --link "Tessella report=$REPORT_URL")
@@ -187,6 +195,8 @@ runs:
         [ -n "$JIRA_PROJECT_ID" ] && args+=(--jira-project-id "$JIRA_PROJECT_ID")
         [ -n "$JIRA_ISSUE_TYPE_ID" ] && args+=(--jira-issue-type-id "$JIRA_ISSUE_TYPE_ID")
         [ -n "$DECISIONS_BRANCH" ] && args+=(--decisions-branch "$DECISIONS_BRANCH")
+        [ -n "$ALLURE_URL" ] && args+=(--allure-url "$ALLURE_URL")
+        [ -n "$ALLURE_FILE" ] && args+=(--allure-file "$ALLURE_FILE")
         "$RUNNER_TEMP/tessella/bin/tessella" "${args[@]}"
     - id: drafts
       if: always()
@@ -221,6 +231,8 @@ runs:
         COMMENT: ${{ inputs.comment }}
         REPORT_URL: ${{ steps.report.outputs.artifact-url }}
         DRAFTS_URL: ${{ steps.drafts.outputs.artifact-url }}
+        ALLURE_URL: ${{ inputs.allure-url }}
+        ALLURE_FILE: ${{ inputs.allure-file }}
         LINKS: ${{ inputs.links }}
         EMAIL_TO: ${{ inputs.email-to }}
         EMAIL_FROM: ${{ inputs.email-from }}
@@ -233,6 +245,8 @@ runs:
         args=(notify .tessella/ci-digest.json --config "$CONFIG" --link "Tessella report=$REPORT_URL")
         while IFS= read -r line; do [ -n "$line" ] && args+=(--link "$line"); done <<< "$LINKS"
         [ -n "$DRAFTS_URL" ] && args+=(--drafts-url "$DRAFTS_URL")
+        [ -n "$ALLURE_URL" ] && args+=(--allure-url "$ALLURE_URL")
+        [ -n "$ALLURE_FILE" ] && args+=(--allure-file "$ALLURE_FILE")
         [ "$COMMENT" = "true" ] && args+=(--comment)
         if [ -n "$EMAIL_TO" ]; then
           args+=(--email --email-to "$EMAIL_TO" --smtp-host "$SMTP_HOST" --smtp-port "$SMTP_PORT")

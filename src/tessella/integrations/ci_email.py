@@ -46,6 +46,8 @@ def _links_for(row: dict, run: str | None, queue: str | None, drafts: str | None
     out = []
     if drafts and row.get("open"):
         out.append(("Open draft", f"{drafts}#case-{row['case_id']}"))
+    if row.get("allure"):
+        out.append(("Open in Allure", row["allure"]))
     review = review_url(row, run, queue)
     if review:
         out.append(("Decide", review))
