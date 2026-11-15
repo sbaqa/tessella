@@ -1293,6 +1293,45 @@ changed: it returns to the queue, marked as re-opened, if the new evidence chang
 and nothing is filed without you. A rejection as a duplicate stays closed. Turn this off with
 `memory.recheck_rejected: false`, and the file with an empty `storage.decisions_file`.
 
+**What happens to a decision committed from a draft.** A button like **No action needed** opens
+GitHub's new-file page with one small file, for example
+`examples/demo_shop/tessella-decisions/bff7717cd37d-80a118fc-no_action.json`:
+
+```json
+{
+  "case_id": "bff7717cd37d",
+  "signature": "80a118fc",
+  "action": "reject",
+  "reason": "no_action",
+  "at": "2026-11-15T09:00:00"
+}
+```
+
+- `case_id` is the test, and `signature` is the way it failed: the normalised error at the same line
+  of your code. A decision belongs to that pair, so if the same test later fails another way, that
+  is a new question and comes back to you.
+- `action` is `reject` for every decision that files nothing (flaky, test or setup problem, duplicate,
+  no action needed); `reason` says which. An approval made without Jira set up is `approve` with
+  `"pending": true`, filed by your dashboard the next time it opens with Jira connected.
+- `at` is when the draft page was made. No names and nothing from the logs go in the file; the commit
+  itself records who decided.
+
+From then on:
+
+1. **CI reads it.** Every `tessella ci` (and `tessella triage`) loads `tessella-decisions/` and
+   `tessella-decisions.jsonl` before it looks at the failures. A pull request's run checks out the
+   default branch merged with the PR, so it sees the file as soon as it is committed there.
+2. **The failure is not asked about again.** When it fails the same way, Tessella recalls your
+   decision instead of investigating: no new draft, no model time, and the email and PR comment list
+   it as decided.
+3. **Your laptop and your team read it too**, after `git pull`, when `tessella review` or the
+   dashboard opens.
+4. **A rejection is not forever.** If the failure comes back with new evidence (its re-runs, its test
+   or the code changed) and a model is available, it is judged again, and returns to you only if the
+   verdict becomes a bug. Duplicates and "no action needed" are never re-opened this way.
+5. **To take a decision back**, delete its file (or run `tessella forget <signature>`); the next run
+   treats the failure as new.
+
 **Approving offline.** Reviewing, editing and deciding need no network. An approval made while
 the board is out of reach is kept and filed the next time the queue opens with a connection.
 
