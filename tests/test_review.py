@@ -551,3 +551,77 @@ def test_a_test_failing_a_new_way_on_ci_reaches_the_laptop_despite_an_old_decisi
     mine.merge_from(db)
     assert mine.get_case("slow").signature == "new-failure" and [c.id for c in mine.open_cases()] == ["slow"]
     assert mine.merge_from(db) == {k: 0 for k in mine.merge_from(db)}
+
+
+def test_a_decision_from_a_link_is_confirmed_before_anything_happens(queue):
+    client, app, store, *_ = queue
+    page = client.get("/review?case=c1&decide=reject:already_fixed")
+    assert page.status_code == 200 and "Mark as already fixed" in page.text and store.last_decision("sig") is None
+    assert client.get("/review?case=c1&decide=reject:whatever").status_code == 400
+    assert client.get("/review?case=c1&decide=edit", follow_redirects=False).headers["location"] == "/#edit-c1"
+    assert client.post("/review", data={"case": "c1", "decide": "reject:already_fixed"}).status_code == 403
+    r = client.post("/review", data={"case": "c1", "decide": "reject:already_fixed", "csrf": app.state.csrf},
+                    follow_redirects=False)
+    assert r.headers["location"] == "/#case-c1"
+    d = store.last_decision("sig")
+    assert d.action == Action.reject and d.reason == RejectReason.already_fixed
+    # once decided, the link only shows it
+    assert client.get("/review?case=c1&decide=approve", follow_redirects=False).status_code == 303
+
+
+def test_a_decision_link_can_load_the_run_first(queue, monkeypatch):
+    client, app, store, *_ = queue
+    page = client.get("/review?run=https://github.com/o/r/actions/runs/9&case=new1&decide=reject:flaky")
+    assert "Mark as flaky" in page.text and "github.com" in page.text
+
+    def load(settings, st, run):
+        st.save_case(_case("new1", "sig-new"))
+
+    monkeypatch.setattr(review, "load", load)
+    client.post("/review", data={"run": "https://github.com/o/r/actions/runs/9", "case": "new1",
+                                 "decide": "reject:flaky", "csrf": app.state.csrf})
+    assert store.last_decision("sig-new").reason == RejectReason.flaky
+
+
+def test_an_approval_with_no_board_can_be_filed_later_or_taken_back(tmp_path, monkeypatch):
+    from starlette.testclient import TestClient
+
+    from tessella.draft.ticket import ticket
+    from tessella.integrations import jira
+    from tessella.queue.app import create_app
+
+    s = Settings()
+    s.storage.path = str(tmp_path / "s.sqlite")
+    store = Store(s.storage.path)
+    case = _case()
+    case.draft = ticket(case)
+    store.save_case(case)
+    store.record(case, Decision(action=Action.approve, by="a", at=NOW))
+    client = TestClient(create_app(s))
+    page = client.get("/").text
+    assert "Approved, not filed" in page and '"unfiled":true' in page
+    app = client.app
+    assert client.post("/cases/c1/file", data={"csrf": app.state.csrf}).status_code == 409  # no board yet
+    s.board = "jira"
+    monkeypatch.setattr(jira, "create_or_link", lambda *a: ("KAN-4", "https://j/KAN-4", False))
+    client = TestClient(create_app(s))
+    client.post("/cases/c1/file", data={"csrf": client.app.state.csrf})
+    assert store.last_decision("sig").ticket_key == "KAN-4"
+    client.post("/cases/c1/reopen", data={"csrf": client.app.state.csrf})
+    assert store.last_decision("sig") is None and [c.id for c in store.open_cases()] == ["c1"]
+
+
+def test_each_draft_link_shows_that_draft_alone_with_its_decisions(tmp_path):
+    from tessella.draft.ticket import ticket
+    from tessella.report import drafts
+
+    store = Store(tmp_path / "s.sqlite")
+    case = _case()
+    case.draft = ticket(case)
+    store.save_case(case)
+    page = drafts.render({"headline": "", "rows": [{"case_id": "c1", "open": True}]}, store, {},
+                         "https://github.com/o/r/actions/runs/9", [], "https://tessella.lan:8484/")
+    assert "body:has(section:target) section:not(:target)" in page and "<script" not in page
+    assert 'href="https://tessella.lan:8484/review?run=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Factions%2Fruns%2F9&amp;case=c1&amp;decide=reject:already_fixed"' in page
+    for label in ("Approve and file", "Edit first", "Flaky", "Already fixed", "Won't fix", "Not a bug", "Duplicate"):
+        assert label in page.replace("&#x27;", "'")

@@ -136,6 +136,8 @@ class RejectReason(StrEnum):
     test_data = "test_data"
     flaky = "flaky"
     duplicate = "duplicate"
+    already_fixed = "already_fixed"  # real, but fixed since: nothing left to file
+    wont_fix = "wont_fix"  # real, and the team chose not to fix it
 
 
 class Decision(BaseModel):

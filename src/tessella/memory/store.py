@@ -294,11 +294,14 @@ class Store:
         """Approvals made while the board was out of reach, oldest first."""
         return [pair for pair in reversed(self.recent_decisions(limit=1000)) if pair[1].pending]
 
-    def mark_filed(self, case: Case, decision: Decision) -> None:
+    def mark_filed(self, case: Case, decision: Decision, unfiled_too: bool = False) -> None:
+        """A ticket now exists for an approval that was waiting (or, with `unfiled_too`, one
+        made before any board was set up)."""
         with self._lock:
             self.db.execute(
                 "UPDATE decisions SET pending = 0, board = ?, ticket_key = ?, ticket_url = ?, "
-                "linked_existing = ? WHERE case_id = ? AND signature = ? AND pending = 1",
+                "linked_existing = ? WHERE case_id = ? AND signature = ? AND action = 'approve' "
+                + ("AND ticket_key IS NULL" if unfiled_too else "AND pending = 1"),
                 (decision.board, decision.ticket_key, decision.ticket_url, int(decision.linked_existing),
                  case.id, case.signature))
             self.db.commit()

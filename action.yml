@@ -24,8 +24,8 @@ inputs:
     description: Post the summary on the pull request. Needs pull-requests write permission.
     default: "true"
   minutes:
-    description: Stop asking the model after this long. Failures left over are reported as not judged.
-    default: "25"
+    description: Optional. Stop asking the model after this many minutes. Empty runs the triage to the end.
+    default: ""
   ollama-version:
     description: Ollama release to install on the runner.
     default: "0.32.4"
@@ -131,7 +131,8 @@ runs:
         HAS_MODEL: ${{ steps.model.outcome == 'success' }}
         WANTS_MODEL: ${{ inputs.use-model }}
       run: |
-        args=(ci --config "$CONFIG" --minutes "$MINUTES" --no-comment --digest .tessella/ci-digest.json)
+        args=(ci --config "$CONFIG" --no-comment --digest .tessella/ci-digest.json)
+        [ -n "$MINUTES" ] && args+=(--minutes "$MINUTES")
         [ "$RERUN" = "true" ] || args+=(--no-rerun)
         [ "$HAS_MODEL" = "true" ] || args+=(--no-model)
         [ "$HAS_MODEL" != "true" ] && [ "$WANTS_MODEL" = "true" ] && args+=(--model-failed)

@@ -242,7 +242,9 @@ def _board(runs: list[dict], by_sig: dict[str, list[Case]], decisions: dict) -> 
                 links = [{"key": m["key"], "url": m.get("url")}
                          for m in (lead.draft.jira_matches if lead.draft else [])]
             status[r.signature] = {"status": r.status.value, "note": r.note, "links": links,
-                                   "latest": in_latest, "category": r.category}
+                                   "latest": in_latest, "category": r.category,
+                                   "unfiled": bool(d and d.action == Action.approve and not d.ticket_key
+                                                   and not d.pending)}
     counts = Counter(status[sig]["status"] for sig in latest)
     return {"has": bool(latest), "at": runs[-1]["at"] if runs else None,
             "headline": board.headline(view(latest)) if latest else "",
@@ -351,6 +353,7 @@ def build(settings: Settings, store: Store, now: datetime | None = None,
                     note = ("Tessella has not analysed this failure yet. Run tessella triage with a "
                             "model here, or decide it yourself below.")
                 details[m.id].update(todo=note, category=c["category"], lead=c["lead"].id,
+                                     unfiled=st.get("unfiled", False),
                                      pending=bool(getattr(decisions.get(c["signature"]), "pending", False)))
     return {
         "board": board_view,
@@ -921,6 +924,8 @@ def _badge(st: dict) -> str:
             "test_data": "Test data problem", "unknown": "Unclear: needs a person"}
     if st["status"] in ("your_call", "new") and st.get("category") in kind:
         return kind[st["category"]]
+    if st.get("unfiled"):
+        return "Approved, not filed"
     return BOARD_LABELS[st["status"]]
 
 

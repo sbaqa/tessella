@@ -22,13 +22,19 @@ from tessella.models import Action, Decision, RejectReason
 
 # The board could not be reached at all, as opposed to answering with a refusal.
 _UNREACHABLE = (httpx.TransportError, OSError)
-_REVIEW_PAGE = """<!doctype html><meta charset="utf-8"><title>Load this CI run</title>
+# What a link from the email or the drafts page may ask, and how the confirmation reads.
+_DECISIONS = {"approve": "File this ticket", "reject:flaky": "Mark as flaky",
+              "reject:already_fixed": "Mark as already fixed", "reject:wont_fix": "Mark as won't fix",
+              "reject:not_a_bug": "Mark as not a bug", "reject:duplicate": "Mark as a duplicate",
+              "reject:test_bug": "Mark as a test bug, no ticket", "reject:environment": "Mark as an environment problem",
+              "reject:test_data": "Mark as a test data problem"}
+_CONFIRM_PAGE = """<!doctype html><meta charset="utf-8"><title>Tessella</title>
 <body style="font:16px/1.5 system-ui,sans-serif;max-width:34em;margin:4rem auto;padding:0 1rem">
-<h1 style="font-size:1.4rem">Load this CI run?</h1>
-<p>Tessella will download its results from <strong>{where}</strong> and add them to your dashboard.</p>
+<h1 style="font-size:1.3rem">{question}</h1>{fetch}
 <form method="post" action="/review"><input type="hidden" name="csrf" value="{csrf}">
 <input type="hidden" name="run" value="{run}"><input type="hidden" name="case" value="{case}">
-<button style="font:inherit;padding:.5rem 1rem">Download and open</button> <a href="/">Cancel</a></form>"""
+<input type="hidden" name="decide" value="{decide}">
+<button style="font:inherit;padding:.5rem 1rem">{button}</button> <a href="/">Cancel</a></form>"""
 
 
 def reviewer(settings: Settings, authorization: str | None) -> str | None:
@@ -163,6 +169,73 @@ def create_app(settings: Settings):
             raise HTTPException(status_code=404)
         return FileResponse(images[n])
 
+    def _record(case, action: str, reason: str | None, by: str):
+        """Record one decision, filing the ticket on approval. Returns an error response, or
+        None when it is recorded."""
+        from fastapi.responses import PlainTextResponse
+
+        from tessella import egress
+        from tessella.memory import decisions_file
+
+        decision = Decision(action=Action(action), by=by, at=datetime.now(),
+                            reason=RejectReason(reason) if reason else None)
+        if decision.action == Action.approve and case.draft and settings.board:
+            try:
+                if egress.active():
+                    raise httpx.ConnectError("offline mode")
+                decision.ticket_key, decision.ticket_url, decision.linked_existing = _file(case)
+            except _UNREACHABLE:  # no internet: the decision stands and is filed later
+                decision.pending = True
+            except Exception as exc:  # noqa: BLE001 - say why, and record nothing
+                return PlainTextResponse(f"Not filed: {exc}", status_code=502)
+            decision.board = settings.board
+        store.record(case, decision)
+        decisions_file.save(settings, case, decision)
+        return None
+
+    @app.post("/cases/{case_id}/file")
+    async def file_now(request: Request, case_id: str):
+        """File an approval that filed nothing because no board was set up then."""
+        from fastapi import HTTPException
+        from fastapi.responses import PlainTextResponse
+
+        from tessella.memory import decisions_file
+
+        form = await request.form()
+        if not secrets.compare_digest(str(form.get("csrf", "")), app.state.csrf):
+            raise HTTPException(status_code=403, detail="Stale or missing form token; reload the page.")
+        case = store.get_case(case_id)
+        past = store.last_decision(case.signature) if case else None
+        if case is None or not case.draft or not past or past.action != Action.approve or past.ticket_key:
+            return RedirectResponse(f"/#case-{quote(case_id)}", status_code=303)
+        if not settings.board:
+            return PlainTextResponse("Set up a board in tessella.yaml first (board: jira, and the jira: section).",
+                                     status_code=409)
+        try:
+            past.ticket_key, past.ticket_url, past.linked_existing = _file(case)
+        except Exception as exc:  # noqa: BLE001 - say why; the approval stays as it was
+            return PlainTextResponse(f"Not filed: {exc}", status_code=502)
+        past.board, past.pending = settings.board, False
+        store.mark_filed(case, past, unfiled_too=True)
+        decisions_file.save(settings, case, past)
+        return RedirectResponse(f"/#case-{quote(case_id)}", status_code=303)
+
+    @app.post("/cases/{case_id}/reopen")
+    async def reopen(request: Request, case_id: str):
+        """Take back a decision, so the failure waits for a new one."""
+        from fastapi import HTTPException
+
+        from tessella.memory import decisions_file
+
+        form = await request.form()
+        if not secrets.compare_digest(str(form.get("csrf", "")), app.state.csrf):
+            raise HTTPException(status_code=403, detail="Stale or missing form token; reload the page.")
+        case = store.get_case(case_id)
+        if case is not None:
+            store.forget(case.signature)
+            decisions_file.remove(settings, case.signature)
+        return RedirectResponse(f"/#case-{quote(case_id)}", status_code=303)
+
     @app.post("/cases/{case_id}/decide")
     def decide(request: Request, case_id: str, action: str = Form(...),
                reason: str | None = Form(None),
@@ -181,49 +254,46 @@ def create_app(settings: Settings):
             # anyway, but this also avoids the redundant network round-trip).
             return RedirectResponse("/", status_code=303)
         by = getattr(request.state, "reviewer", None) or by  # signed in: the name is theirs
-        decision = Decision(action=Action(action), by=by, at=datetime.now(),
-                            reason=RejectReason(reason) if reason else None)
-        if decision.action == Action.approve and case.draft and settings.board:
-            from tessella import egress
-
-            try:
-                if egress.active():
-                    raise httpx.ConnectError("offline mode")
-                decision.ticket_key, decision.ticket_url, decision.linked_existing = _file(case)
-            except _UNREACHABLE:  # no internet: the decision stands and is filed later
-                decision.pending = True
-            except Exception as exc:  # noqa: BLE001 - say why, and record nothing
-                from fastapi.responses import PlainTextResponse
-
-                return PlainTextResponse(f"Not filed: {exc}", status_code=502)
-            decision.board = settings.board
-        store.record(case, decision)
-        from tessella.memory import decisions_file
-
-        decisions_file.save(settings, case, decision)
+        problem = _record(case, action, reason, by)
+        if problem:
+            return problem
         return RedirectResponse("/", status_code=303)
 
     @app.get("/review", response_class=HTMLResponse)
-    def review_link(run: str = "", case: str = ""):
-        """Where the email's Review button lands: straight to the card if this run is already
-        here, or a confirmation first. A link must never download or merge anything by itself."""
+    def review_link(run: str = "", case: str = "", decide: str = ""):
+        """Where a link from the email or the drafts page lands. A link never changes anything by
+        itself (mail scanners open links): a decision, or a download, is confirmed first."""
         from html import escape
 
         from tessella import review
 
-        if case and store.get_case(case) is not None:
+        known = store.get_case(case) if case else None
+        if decide == "edit" or (known is not None and not decide):
+            return RedirectResponse(f"/#{'edit' if decide == 'edit' else 'case'}-{quote(case)}", status_code=303)
+        if decide and decide not in _DECISIONS:
+            return HTMLResponse("<p>Unknown decision.</p>", status_code=400)
+        where = ""
+        if known is None:
+            try:
+                where = review.describe(run)
+            except ValueError as exc:
+                return HTMLResponse(f"<p>{escape(str(exc))}</p>", status_code=400)
+        if known is not None and store.decided(case):
             return RedirectResponse(f"/#case-{quote(case)}", status_code=303)
-        try:
-            where = review.describe(run)
-        except ValueError as exc:
-            return HTMLResponse(f"<p>{escape(str(exc))}</p>", status_code=400)
-        return HTMLResponse(_REVIEW_PAGE.format(
-            where=escape(where), run=escape(run, quote=True), case=escape(case, quote=True),
-            csrf=app.state.csrf))
+        what = _DECISIONS.get(decide, "")
+        title = escape(known.title) if known else "this failure"
+        question = (f"{escape(what)}: <strong>{title}</strong>?" if what else "Load this CI run?")
+        fetch = (f"<p>Tessella will first download the run's results from <strong>{escape(where)}</strong>.</p>"
+                 if where else "")
+        return HTMLResponse(_CONFIRM_PAGE.format(
+            question=question, fetch=fetch, run=escape(run, quote=True), case=escape(case, quote=True),
+            decide=escape(decide, quote=True), csrf=app.state.csrf,
+            button="Confirm" if what else "Download and open"))
 
     @app.post("/review")
     async def review_load(request: Request):
-        """Download the run the reviewer confirmed, and open the card they came for."""
+        """Do what the reviewer confirmed: load the run if needed, record the decision if any,
+        then show the failure."""
         from fastapi import HTTPException
         from fastapi.responses import PlainTextResponse
 
@@ -231,13 +301,23 @@ def create_app(settings: Settings):
 
         form = await request.form()
         if not secrets.compare_digest(str(form.get("csrf", "")), app.state.csrf):
-            raise HTTPException(status_code=403, detail="Stale or missing form token; reload the queue.")
-        try:
-            await run_in_threadpool(review.load, settings, store, str(form.get("run", "")))
-        except Exception as exc:  # noqa: BLE001 - say why in the page
-            return PlainTextResponse(f"Could not load that run: {exc}", status_code=502)
-        case = str(form.get("case", ""))
-        return RedirectResponse(f"/#case-{quote(case)}" if case else "/", status_code=303)
+            raise HTTPException(status_code=403, detail="Stale or missing form token; reload the page.")
+        case_id, decide = str(form.get("case", "")), str(form.get("decide", ""))
+        if not (case_id and store.get_case(case_id)):
+            try:
+                await run_in_threadpool(review.load, settings, store, str(form.get("run", "")))
+            except Exception as exc:  # noqa: BLE001 - say why in the page
+                return PlainTextResponse(f"Could not load that run: {exc}", status_code=502)
+        case = store.get_case(case_id) if case_id else None
+        if case is not None and decide in _DECISIONS and not store.decided(case_id):
+            action, _, reason = decide.partition(":")
+            if action == "approve" and not case.draft:
+                return RedirectResponse(f"/#case-{quote(case_id)}", status_code=303)
+            by = getattr(request.state, "reviewer", None) or "sdet"
+            problem = await run_in_threadpool(_record, case, action, reason or None, by)
+            if problem:
+                return problem
+        return RedirectResponse(f"/#case-{quote(case_id)}" if case_id else "/", status_code=303)
 
     def _editable(case_id: str, form) -> object | None:
         """The case a reviewer may still change, after checking the form token."""

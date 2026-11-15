@@ -29,6 +29,10 @@ nav a{display:inline-block;margin:0 8px 8px 0;padding:7px 12px;border:1px solid 
 ol.toc{background:#fff;border:1px solid #dde2e7;border-radius:8px;padding:12px 12px 12px 34px;margin:12px 0 18px;word-break:break-word}
 section{background:#fff;border:1px solid #dde2e7;border-left:4px solid #7d8791;border-radius:8px;padding:14px 18px;margin:0 0 14px;scroll-margin-top:12px}
 section:target{outline:3px solid #2a78d6}
+body:has(section:target) section:not(:target),body:has(section:target) .all{display:none}
+.only{display:none} body:has(section:target) .only{display:block;margin:0 0 12px}
+.act{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px} .act a{padding:7px 11px;border:1px solid #121920;border-radius:6px;color:inherit;text-decoration:none;font-size:13.5px;font-weight:600}
+.act a.go{background:#121920;color:#fff} p.hint{color:#6b7680;font-size:12.5px;margin:6px 0 0}
 section.product_bug{border-left-color:#2a78d6} section.test_bug{border-left-color:#eb6834} section.flaky{border-left-color:#1baf7a}
 .kind{font-size:12px;font-weight:700;color:#46525d} h2{font-size:17px;margin:2px 0 2px;word-break:break-word} p.test{color:#6b7680;font-size:13px;margin:0 0 10px;word-break:break-word}
 dl{display:grid;grid-template-columns:170px minmax(0,1fr);gap:6px 14px;margin:0} dt{color:#6b7680;font-size:13px;font-weight:600} dd{margin:0;white-space:pre-wrap;word-break:break-word}
@@ -58,7 +62,26 @@ def _image(path: str) -> str | None:
         return None  # the draft still reads without its picture
 
 
-def _section(case: Case, row: dict, run: str | None) -> str:
+# The choices under each draft, as links into Tessella on the reviewer's machine (or a team's
+# own dashboard). Each opens a confirmation there; nothing changes until the reviewer confirms.
+_ACTIONS = (("approve", "Approve and file"), ("edit", "Edit first"), ("reject:flaky", "Flaky"),
+            ("reject:already_fixed", "Already fixed"), ("reject:wont_fix", "Won't fix"),
+            ("reject:not_a_bug", "Not a bug"), ("reject:duplicate", "Duplicate"),
+            ("reject:test_bug", "Test bug, no ticket"), ("reject:environment", "Environment"),
+            ("reject:test_data", "Test data"))
+
+
+def _actions(case: Case, run: str | None, base: str) -> str:
+    from urllib.parse import quote
+
+    links = "".join(
+        f'<a{" class=go" if i == 0 else ""} href="{escape(base)}/review?run={quote(run or "", safe="")}'
+        f'&amp;case={quote(case.id, safe="")}&amp;decide={quote(key, safe=":")}">{escape(label)}</a>'
+        for i, (key, label) in enumerate(_ACTIONS) if key != "approve" or case.draft)
+    return f'<div class="act">{links}</div>'
+
+
+def _section(case: Case, row: dict, run: str | None, base: str = "http://127.0.0.1:8484") -> str:
     v, d = case.verdict, case.draft
     kind = _LABEL.get(str(v.category), "Not analysed") if v else "Not analysed"
     sure = f", {v.confidence:.0%} sure" if v and v.confidence else ""
@@ -79,17 +102,20 @@ def _section(case: Case, row: dict, run: str | None) -> str:
     return (f'<section id="case-{escape(case.id, quote=True)}" class="{escape(str(v.category) if v else "none", quote=True)}">'
             f'<div class="kind">{escape(kind)}{sure}</div><h2>{escape(title)}</h2>'
             f'<p class="test">{escape(case.title)}</p>{body}{shots}{patch}'
-            f'<h3>Decide on your machine</h3><code class="cmd">{escape(command)}</code></section>')
+            f'<h3>Decide</h3>{_actions(case, run, base)}'
+            f'<p class="hint">These open Tessella on your machine to confirm. Start it first with:</p>'
+            f'<code class="cmd">{escape(command)}</code></section>')
 
 
-def render(digest: dict, store: Store, ctx: dict, run: str | None, links: list[tuple[str, str]]) -> str:
+def render(digest: dict, store: Store, ctx: dict, run: str | None, links: list[tuple[str, str]],
+           base: str = "http://127.0.0.1:8484") -> str:
     """The page, for the failures of this run that still need a person."""
     sections, toc = [], []
     for row in digest["rows"]:
         case = store.get_case(row["case_id"]) if row.get("open") else None
         if case is None:
             continue
-        sections.append(_section(case, row, run))
+        sections.append(_section(case, row, run, base.rstrip("/")))
         toc.append(f'<li><a href="#case-{escape(case.id, quote=True)}">{escape(case.title)}</a></li>')
     where = " · ".join(escape(v) for v in (ctx.get("repo"), ctx.get("change"), ctx.get("branch"), ctx.get("commit")) if v)
     nav = "".join(f'<a href="{escape(url, quote=True)}">{escape(name)}</a>' for name, url in links)
@@ -98,7 +124,8 @@ def render(digest: dict, store: Store, ctx: dict, run: str | None, links: list[t
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" '
             f'content="width=device-width,initial-scale=1"><title>Tessella ticket drafts</title><style>{_STYLE}</style></head>'
             f'<body><main><h1>Ticket drafts</h1><p class="where">{where}</p>'
-            f'<p>{escape(digest["headline"] or "")}</p><nav>{nav}</nav>'
-            + (f'<ol class="toc">{"".join(toc)}</ol>' if toc else "")
+            '<p class="only"><a href="#">All drafts of this run</a></p>'
+            f'<div class="all"><p>{escape(digest["headline"] or "")}</p><nav>{nav}</nav>'
+            + (f'<ol class="toc">{"".join(toc)}</ol>' if toc else "") + "</div>"
             + "".join(sections)
             + "<p>Read-only. Nothing is filed to the board without a person approving it.</p></main></body></html>")

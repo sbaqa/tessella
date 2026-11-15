@@ -16,7 +16,12 @@
 - A rejected failure that returns with new evidence is judged again by the local model, and comes back only if the verdict changes.
 - Approving while the board is out of reach is kept and filed when it can be reached.
 
+- Each Open draft link shows only that draft, with buttons to approve, edit, or mark it flaky, already fixed, won't fix, not a bug, a duplicate and more. They open Tessella on your machine to confirm.
+- An approval made before a board was set up can be filed later from its panel, and any decision can be taken back.
+- New reasons: already fixed, won't fix.
+
 ### Changed
+- The CI triage has no time limit by default; it runs to the end.
 - One screen: the dashboard replaces the review queue. Each failure's panel has the full ticket, screenshots, Edit, an Allure link and one decision control. After a decision the next failure opens.
 - A failure with no draft can become a ticket: choose "It is a bug" and fill it in.
 - Failure tiles carry colour and a letter, and the page says which folder you are looking at.

@@ -1166,7 +1166,7 @@ permissions: { contents: read, pull-requests: write }
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 360             # GitHub's limit: let the triage finish
     steps:
       - uses: actions/checkout@v4
       # ... install your project and run your tests ...
@@ -1203,8 +1203,9 @@ Outside the action: `tessella ci --no-comment --digest d.json`, upload your repo
 `tessella notify d.json --link "Report=URL" --comment --email`. The links need a GitHub sign-in
 with access to the repository, and they last as long as the artifact does (90 days by default).
 
-A standard runner has no GPU, so the model runs on 4 CPU cores. `minutes` (default 25) stops
-asking the model after that long and reports what is left as not judged. With `use-model:
+A standard runner has no GPU, so the model runs on 4 CPU cores, and the triage runs to the end:
+a faster runner or a GPU makes it quicker. Set `minutes` only if you want a cap; what is left is
+then reported as not judged. With `use-model:
 false`, or if the model cannot be installed, you still get the failures grouped, the kind of
 each one, which ones the board already has (by the ticket's `tessella-<signature>` label, when
 Jira is configured) and how often each failed before.
@@ -1217,7 +1218,7 @@ judge with a model, or add `--no-model`:
   if: failure()
   run: |
     pip install "tessella[llm,vision] @ git+https://github.com/sbaqa/tessella"
-    tessella ci --minutes 25 playwright-report/ test-results/*.xml
+    tessella ci playwright-report/ test-results/*.xml
 ```
 
 **Review a CI run on your laptop.** CI triages and publishes its results; you decide locally. No
