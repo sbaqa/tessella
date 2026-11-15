@@ -27,10 +27,10 @@
 </p>
 
 <p align="center">
-  <img src="docs/media/hero.gif" alt="CI goes red, Tessella emails one summary, a draft opens with its Allure test, Jira opens prefilled, a decision is committed" width="880">
+  <img src="docs/media/hero.gif" alt="Nine steps: the email, a failure, its draft, the test in Allure, filing in Jira, marking a flaky test, committing the decision, the dashboard" width="880">
 </p>
 
-<p align="center"><a href="docs/media/tessella-story.webm"><b>▶ Watch the 50-second story</b></a>: a night of red tests, and the morning after.</p>
+<p align="center"><a href="docs/media/tessella-story.webm"><b>▶ Watch Maya's Monday (1 minute)</b></a>: 40 red tests, a lost morning, and the Monday after Tessella.</p>
 
 A nightly run fails 40 tests, and someone loses a morning working out which are real bugs, which are broken tests and which are the same problem 15 times. AI could help, but in many companies logs and code may not leave the building. Tessella does that investigation **inside your network**, on a small local model, and backs every conclusion with evidence you can check.
 
