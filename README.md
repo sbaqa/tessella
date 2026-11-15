@@ -1233,12 +1233,19 @@ It downloads the `tessella-db` artifact, merges it into your local database, sta
 queue and opens your browser. To read first, each failure in the email has **Open draft**: the full ticket
 on a plain page published with the run (`tessella drafts`, then `tessella notify --drafts-url`).
 
-Each draft there has its decisions as buttons. **Approve and file** opens Jira's own Create page with
-the ticket filled in and Tessella's label, once the action has `jira-url`, `jira-project-id` and
-`jira-issue-type-id` (`tessella doctor --board` prints the two IDs); you check it and click Create, and
-the dashboard marks that failure filed when it next opens. **Flaky**, **Already fixed**, **Won't fix**
-and the rest open GitHub's new-file page with that one decision filled in: committing it records the
-decision in `tessella-decisions/`, which CI and your team read. **Edit first** opens your dashboard.
+Each draft there has five buttons, and none of them needs Tessella running:
+
+| Button | What it does |
+| --- | --- |
+| Review and file in Jira | Opens Jira's Create page with the ticket and Tessella's label filled in; you edit anything and click Create. The dashboard marks the failure filed when it next opens |
+| Duplicate of KAN-7 | Shown when Tessella found a ticket that reads like this failure, listed above the buttons with a View link. Without one, **Search Jira for a duplicate** opens Jira's search for the failure's words |
+| Flaky test | It passes on a re-run: nothing wrong with the product |
+| Test or setup problem | The code is fine; the test, its data or its environment needs fixing. Opens Jira to file a `[test fix]` task |
+| No action needed | Real, but nothing to file: fixed since, or not worth fixing |
+
+Jira's pages need the action's `jira-url`, `jira-project-id` and `jira-issue-type-id` (`tessella
+doctor --board` prints the IDs). Recording a decision opens GitHub's new-file page with that one
+decision filled in: committing it adds it to `tessella-decisions/`, which CI and your team read.
 A run link needs a token from the environment, used only for that provider:
 
 | CI | Link it reads | Token |

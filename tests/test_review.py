@@ -622,9 +622,10 @@ def test_each_draft_link_shows_that_draft_alone_with_its_decisions(tmp_path):
     page = drafts.render({"headline": "", "rows": [{"case_id": "c1", "open": True}]}, store, {},
                          "https://github.com/o/r/actions/runs/9", [], "https://tessella.lan:8484/")
     assert "body:has(section:target) section:not(:target)" in page and "<script" not in page
-    assert 'href="https://tessella.lan:8484/review?run=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Factions%2Fruns%2F9&amp;case=c1&amp;decide=reject:already_fixed"' in page
-    for label in ("Approve and file", "Flaky", "Already fixed", "Won't fix", "Not a bug", "Duplicate"):
-        assert label in page.replace("&#x27;", "'")
+    assert 'href="https://tessella.lan:8484/review?run=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Factions%2Fruns%2F9&amp;case=c1&amp;decide=reject:no_action"' in page
+    for label in ("Approve and file", "Flaky test", "Test or setup problem", "No action needed"):
+        assert label in page
+    assert "Already fixed" not in page and "Environment problem" not in page
 
 
 def test_draft_buttons_go_to_jira_and_github_when_set_up(tmp_path):
@@ -719,3 +720,39 @@ def test_repo_folder_and_url():
     assert ci_comment.repo_url(env) == "https://github.com/o/r"
     assert ci_comment.repo_folder("/w/examples/demo", env) == "examples/demo/"
     assert ci_comment.repo_folder("/w", env) == "" and ci_comment.repo_folder("/elsewhere", env) == ""
+
+
+def test_five_buttons_show_the_duplicate_ticket_and_file_a_test_fix(tmp_path):
+    import html as h
+    from urllib.parse import parse_qs, urlsplit
+
+    from tessella.draft.ticket import ticket
+    from tessella.report import drafts
+
+    store = Store(tmp_path / "s.sqlite")
+    case = _case()
+    case.draft = ticket(case)
+    case.draft.jira_matches = [{"key": "KAN-7", "summary": "Cancel fails", "url": "https://acme.atlassian.net/browse/KAN-7"}]
+    store.save_case(case)
+    other = _case("c2", "sig2")
+    other.message = "AssertionError: recommendations took 0.86s"
+    other.draft = ticket(other)
+    store.save_case(other)
+    online = drafts.Online(jira_url="https://acme.atlassian.net", project_id="10000", issue_type_id="10003",
+                           github="https://github.com/o/r", branch="main", at="2026-11-15T10:00:00")
+    page = drafts.render({"headline": "", "rows": [{"case_id": "c1", "open": True}, {"case_id": "c2", "open": True}]},
+                         store, {}, None, [], online=online)
+    one = page[page.index('id="case-c1"'):page.index('id="case-c2"')]
+    assert "Possibly already on the board" in one and 'href="https://acme.atlassian.net/browse/KAN-7"' in one
+    assert ">Duplicate of KAN-7<" in one
+    two = page[page.index('id="case-c2"'):]
+    hrefs = [h.unescape(x) for x in __import__("re").findall(r'href="([^"]+)"', two)]
+    search = next(x for x in hrefs if "/issues/?" in x)
+    assert 'text ~ "AssertionError recommendations took"' in parse_qs(urlsplit(search).query)["jql"][0]
+    fix = next(x for x in hrefs if "tessella-test-fix" in x)
+    q = parse_qs(urlsplit(fix).query)
+    assert q["summary"][0].startswith("[test fix] ") and "tessella-sig2" in q["labels"]
+    assert any("no_action" in x for x in hrefs) and any("flaky" in x for x in hrefs)
+    labels = __import__("re").findall(r'rel="noopener">([^<]+)</a>', two)
+    assert labels == ["Review and file in Jira", "Search Jira for a duplicate", "Flaky test",
+                      "Test or setup problem", "No action needed"]

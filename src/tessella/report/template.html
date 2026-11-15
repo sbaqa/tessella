@@ -768,7 +768,7 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
     b.addEventListener("click", function () { cfg.fview = b.getAttribute("data-fview"); save(); applyFview(); });
   });
   var REASONS = { duplicate: "a duplicate", not_a_bug: "not a bug", test_bug: "a test bug", flaky: "flaky",
-                  already_fixed: "already fixed", wont_fix: "won't fix",
+                  already_fixed: "already fixed", wont_fix: "won't fix", no_action: "no action needed",
                   environment: "an environment problem", test_data: "a test data problem" };
   var pendingDecision = null;
   function hideDecide() { var bar = document.getElementById("decide-bar"); if (bar) bar.hidden = true; pendingDecision = null; }
@@ -890,9 +890,9 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
   var TICKET = [["title", "Title", "title", "title"], ["description", "Description", "textarea", "description"], ["steps", "Steps to reproduce", "textarea", "steps_to_reproduce"],
                 ["actual", "Actual result", "textarea", "actual_result"], ["expected", "Expected result", "textarea", "expected_result"],
                 ["environment", "Environment", "textarea", "environment"], ["root_cause", "Root cause (suspected)", "textarea", "root_cause"], ["fix", "Suggested fix", "textarea", "suggested_fix"]];
-  var CHOICES = [["flaky", "Flaky test, no ticket needed"], ["environment", "Environment problem"], ["test_data", "Test data problem (the setup data, not the code)"],
-                 ["test_bug", "Test bug, no ticket needed"], ["already_fixed", "Already fixed"], ["wont_fix", "Won't fix"],
-                 ["not_a_bug", "Not a bug"], ["duplicate", "Duplicate of an existing ticket"]];
+  var CHOICES = [["duplicate", "Duplicate of an existing ticket"], ["flaky", "Flaky test"],
+                 ["test_bug", "Test or setup problem (the test, its data or its environment)"],
+                 ["no_action", "No action needed (fixed since, or not worth fixing)"]];
   var boardName = {{board_json}};
   /* after a decision, straight to the next failure that needs a person */
   function goNext(done) {
@@ -918,7 +918,7 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
     }
     var lead = c.lead || id, box = el("div", null, "decision"), label = el("label", "Your decision");
     var select = el("select"); select.id = "decision-select"; label.htmlFor = select.id;
-    var rec = { flaky: 1, environment: 1, test_data: 1 }[c.category] ? c.category : "";
+    var rec = { flaky: "flaky", environment: "test_bug", test_data: "test_bug" }[c.category] || "";
     if (!c.draft && !rec) select.appendChild(new Option("Choose…", ""));
     select.appendChild(new Option(!c.draft ? "It is a bug: write a ticket" : c.category === "flaky" ? "File this ticket" : "Real bug: file this ticket", c.draft ? "approve" : "write"));
     CHOICES.forEach(function (o) { select.appendChild(new Option(o[1] + (o[0] === rec ? " (suggested)" : ""), o[0])); });

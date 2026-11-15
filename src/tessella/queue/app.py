@@ -27,7 +27,7 @@ _DECISIONS = {"approve": "File this ticket", "reject:flaky": "Mark as flaky",
               "reject:already_fixed": "Mark as already fixed", "reject:wont_fix": "Mark as won't fix",
               "reject:not_a_bug": "Mark as not a bug", "reject:duplicate": "Mark as a duplicate",
               "reject:test_bug": "Mark as a test bug, no ticket", "reject:environment": "Mark as an environment problem",
-              "reject:test_data": "Mark as a test data problem"}
+              "reject:test_data": "Mark as a test data problem", "reject:no_action": "Mark as no action needed"}
 _CONFIRM_PAGE = """<!doctype html><meta charset="utf-8"><title>Tessella</title>
 <body style="font:16px/1.5 system-ui,sans-serif;max-width:34em;margin:4rem auto;padding:0 1rem">
 <h1 style="font-size:1.3rem">{question}</h1>{fetch}

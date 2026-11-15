@@ -138,6 +138,7 @@ class RejectReason(StrEnum):
     duplicate = "duplicate"
     already_fixed = "already_fixed"  # real, but fixed since: nothing left to file
     wont_fix = "wont_fix"  # real, and the team chose not to fix it
+    no_action = "no_action"  # real, but nothing to file: fixed since, or not worth fixing
 
 
 class Decision(BaseModel):

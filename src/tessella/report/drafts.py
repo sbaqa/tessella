@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import re
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
@@ -35,7 +36,8 @@ section:target{outline:3px solid #2a78d6}
 body:has(section:target) section:not(:target),body:has(section:target) .all{display:none}
 .only{display:none} body:has(section:target) .only{display:block;margin:0 0 12px}
 .act{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px} .act a{padding:7px 11px;border:1px solid #121920;border-radius:6px;color:inherit;text-decoration:none;font-size:13.5px;font-weight:600}
-.act a.go{background:#121920;color:#fff} p.hint{color:#6b7680;font-size:12.5px;margin:6px 0 0}
+.act a.go{background:#121920;color:#fff}
+p.dup{margin:8px 0 2px;font-weight:600;font-size:13.5px} ul.dup{margin:0 0 6px;padding-left:18px;font-size:13.5px} p.hint{color:#6b7680;font-size:12.5px;margin:6px 0 0}
 section.product_bug{border-left-color:#2a78d6} section.test_bug{border-left-color:#eb6834} section.flaky{border-left-color:#1baf7a}
 .kind{font-size:12px;font-weight:700;color:#46525d} h2{font-size:17px;margin:2px 0 2px;word-break:break-word} p.test{color:#6b7680;font-size:13px;margin:0 0 10px;word-break:break-word}
 dl{display:grid;grid-template-columns:170px minmax(0,1fr);gap:6px 14px;margin:0} dt{color:#6b7680;font-size:13px;font-weight:600} dd{margin:0;white-space:pre-wrap;word-break:break-word}
@@ -65,19 +67,6 @@ def _image(path: str) -> str | None:
         return None  # the draft still reads without its picture
 
 
-# The choices under each draft. They open Jira or GitHub, never this machine: the page is read
-# from an email, where nothing local can be assumed to be running.
-_ACTIONS = (("approve", "Approve and file", "File this ticket to the board"),
-            ("reject:flaky", "Flaky", "It passes on a re-run: track the test, not a bug"),
-            ("reject:already_fixed", "Already fixed", "A real bug, fixed since: nothing to file"),
-            ("reject:wont_fix", "Won't fix", "A real bug the team chose not to fix"),
-            ("reject:not_a_bug", "Not a bug", "The test expected the wrong thing"),
-            ("reject:duplicate", "Duplicate", "Already on the board as another ticket"),
-            ("reject:test_bug", "Test bug, no ticket", "The test itself is wrong, fixed without a ticket"),
-            ("reject:environment", "Environment problem", "A server, network or setup problem, not the code"),
-            ("reject:test_data", "Test data problem", "The test's setup data was wrong, not the code"))
-
-
 @dataclass
 class Online:
     """Where the buttons act without Tessella running: Jira's own create page for Approve, and
@@ -92,9 +81,10 @@ class Online:
     at: str = ""  # when the page was made: the decision's time
 
 
-def _jira_create(case: Case, online: Online) -> str | None:
+def _jira_create(case: Case, online: Online, test_task: bool = False) -> str | None:
     """Jira's "Create issue" page with this draft filled in and Tessella's label, so the ticket
-    is known as this failure's. The person still checks it and clicks Create."""
+    is known as this failure's. The person still checks it and clicks Create. `test_task` makes
+    it a task to fix the test, its data or its environment, labelled as not a product bug."""
     from urllib.parse import urlencode
 
     from tessella.integrations.jira import _label
@@ -104,8 +94,13 @@ def _jira_create(case: Case, online: Online) -> str | None:
         return None
     # Plain text: Jira's create page shows wiki or Markdown marks literally.
     fields = "\n\n".join(f"{label}:\n{getattr(d, name) or 'Not available'}" for label, name in _FIELDS)
-    params = [("pid", online.project_id), ("issuetype", online.issue_type_id), ("summary", d.title[:250]),
+    summary = f"[test fix] {case.title}" if test_task else d.title
+    if test_task:
+        fields = ("The code looks fine: the test, its data or its environment needs fixing.\n\n" + fields)
+    params = [("pid", online.project_id), ("issuetype", online.issue_type_id), ("summary", summary[:250]),
               ("description", fields[:6000]), ("labels", "tessella")]
+    if test_task:
+        params.append(("labels", "tessella-test-fix"))
     if case.signature:
         params.append(("labels", _label(case.signature)))
     return f"{online.jira_url.rstrip('/')}/secure/CreateIssueDetails!init.jspa?{urlencode(params)}"
@@ -129,31 +124,82 @@ def _commit_decision(case: Case, action: str, reason: str, online: Online) -> st
             + urlencode({"filename": name, "value": json.dumps(entry, indent=2) + "\n"}))
 
 
-def _actions(case: Case, run: str | None, base: str, online: Online | None = None) -> str:
-    """Approve opens Jira's Create page (editable there before Create), or, without Jira set up,
-    commits a pending approval on GitHub. The rest commit their decision on GitHub. A choice
-    with neither goes to a team's dashboard server if one is set, or is left out: the page
-    never links to this machine."""
-    online = online or Online()
-    links = []
-    for key, label, hint in _ACTIONS:
-        if key == "approve" and not case.draft:
-            continue
-        action, _, reason = key.partition(":")
-        jira = _jira_create(case, online) if action == "approve" else None
-        url = jira or _commit_decision(case, action, reason, online)
-        if not url and base:  # a team's own dashboard server, never this machine's
-            from urllib.parse import quote
+def _matches(case: Case, online: Online) -> list[tuple[str, str, str]]:
+    """Tickets already in Jira that read like this failure: (key, summary, link)."""
+    d, base = case.draft, online.jira_url.rstrip("/")
+    if not d:
+        return []
+    out = [(m["key"], m.get("summary", ""), m.get("url") or (f"{base}/browse/{m['key']}" if base else ""))
+           for m in d.jira_matches]
+    seen = {k for k, _, _ in out}
+    out += [(k, "", f"{base}/browse/{k}" if base else "") for k in d.possible_duplicates if k not in seen]
+    return out
 
-            url = (f"{base}/review?run={quote(run or '', safe='')}&case={quote(case.id, safe='')}"
-                   f"&decide={quote(key, safe=':')}")
-        if not url:
-            continue
-        if jira:
-            label, hint = "Review and file in Jira", "Opens Jira's Create page filled in: edit anything, then click Create"
-        links.append(f'<a{" class=go" if not links else ""} href="{escape(url, quote=True)}" '
-                     f'title="{escape(hint)}" target="_blank" rel="noopener">{escape(label)}</a>')
-    return f'<div class="act">{"".join(links)}</div>' if links else ""
+
+def _search_jira(case: Case, online: Online) -> str | None:
+    """Jira's issue search for this failure's words, to look for a duplicate by eye."""
+    from urllib.parse import urlencode
+
+    if not (online.jira_url and online.project_id):
+        return None
+    words = " ".join(re.findall(r"[A-Za-z][A-Za-z0-9_]{3,}", case.message or case.title)[:6])
+    jql = f'project = {online.project_id} AND text ~ "{words}" ORDER BY created DESC'
+    return f"{online.jira_url.rstrip('/')}/issues/?{urlencode({'jql': jql})}"
+
+
+def _button(url: str, label: str, hint: str, primary: bool = False) -> str:
+    return (f'<a{" class=go" if primary else ""} href="{escape(url, quote=True)}" title="{escape(hint)}" '
+            f'target="_blank" rel="noopener">{escape(label)}</a>')
+
+
+def _actions(case: Case, run: str | None, base: str, online: Online | None = None) -> str:
+    """Five choices. They open Jira or GitHub, never this machine: the page is read from an
+    email, where nothing local can be assumed to be running. A choice that can go to neither
+    goes to a team's dashboard server if one is set, or is left out."""
+    from urllib.parse import quote
+
+    online = online or Online()
+
+    def local(key: str) -> str | None:
+        if not base:
+            return None
+        return (f"{base}/review?run={quote(run or '', safe='')}&case={quote(case.id, safe='')}"
+                f"&decide={quote(key, safe=':')}")
+
+    def record(action: str, reason: str = "") -> str | None:
+        return _commit_decision(case, action, reason, online) or local(f"{action}:{reason}" if reason else action)
+
+    buttons, found = [], ""
+    if case.draft:
+        url = _jira_create(case, online)
+        if url:
+            buttons.append(_button(url, "Review and file in Jira", "Opens Jira's Create page filled in: "
+                                   "edit anything, then click Create", True))
+        elif record("approve"):
+            buttons.append(_button(record("approve"), "Approve and file", "File this ticket to the board", True))
+    matches = _matches(case, online)
+    if matches:
+        rows = "".join(f'<li><a href="{escape(link, quote=True)}" target="_blank" rel="noopener">View '
+                       f'{escape(key)}</a> {escape(summary)}</li>' if link else
+                       f"<li>{escape(key)} {escape(summary)}</li>" for key, summary, link in matches)
+        found = f'<p class="dup">Possibly already on the board:</p><ul class="dup">{rows}</ul>'
+        url = record("reject", "duplicate")
+        if url:
+            buttons.append(_button(url, f"Duplicate of {matches[0][0]}", "Record it as a duplicate of that ticket"))
+    elif _search_jira(case, online):
+        buttons.append(_button(_search_jira(case, online), "Search Jira for a duplicate",
+                               "Opens Jira's search for this failure's words"))
+    url = record("reject", "flaky")
+    if url:
+        buttons.append(_button(url, "Flaky test", "It passes on a re-run: nothing wrong with the product"))
+    url = _jira_create(case, online, test_task=True) or record("reject", "test_bug")
+    if url:
+        buttons.append(_button(url, "Test or setup problem", "The code is fine: the test, its data or its "
+                               "environment needs fixing. Opens Jira to file a task for it"))
+    url = record("reject", "no_action")
+    if url:
+        buttons.append(_button(url, "No action needed", "Real, but nothing to file: fixed since, or not worth fixing"))
+    return found + (f'<div class="act">{"".join(buttons)}</div>' if buttons else "")
 
 
 def _section(case: Case, row: dict, run: str | None, base: str = "",
@@ -190,12 +236,13 @@ def _how(case: Case, online: Online | None) -> str:
     if _jira_create(case, online):
         parts.append("Review and file opens Jira's Create page with this ticket filled in: change "
                      "anything there, then click Create.")
+        parts.append("Test or setup problem opens it as a task to fix the test.")
     elif online.github and case.draft:
         parts.append("Approve commits your approval through GitHub; the ticket is filed the next time "
                      "your Tessella dashboard opens with Jira connected.")
     if online.github:
-        parts.append("The other buttons commit your decision to the repository through GitHub, so CI "
-                     "and your team see it.")
+        parts.append("Duplicate, Flaky test and No action needed commit your decision to the repository "
+                     "through GitHub, so CI and your team see it.")
     parts.append("To edit or decide in your own Tessella dashboard instead, run:")
     return " ".join(parts)
 

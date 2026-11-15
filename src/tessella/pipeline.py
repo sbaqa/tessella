@@ -91,7 +91,7 @@ def _filed_on_board(settings: Settings, signature: str) -> Decision | None:
 def _worth_rechecking(settings: Settings, past: Decision, use_model: bool) -> bool:
     """A rejected failure that came back gets another look, unless it duplicates a ticket."""
     return (use_model and settings.memory.recheck_rejected and past.action == Action.reject
-            and past.reason not in (RejectReason.duplicate, RejectReason.wont_fix))
+            and past.reason not in (RejectReason.duplicate, RejectReason.wont_fix, RejectReason.no_action))
 
 
 def _fingerprint(case: Case) -> str:
