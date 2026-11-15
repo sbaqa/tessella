@@ -890,7 +890,7 @@ table.cases tr.sep td { font-size: 0.78rem; font-weight: 650; color: var(--ink-3
   var TICKET = [["title", "Title", "title", "title"], ["description", "Description", "textarea", "description"], ["steps", "Steps to reproduce", "textarea", "steps_to_reproduce"],
                 ["actual", "Actual result", "textarea", "actual_result"], ["expected", "Expected result", "textarea", "expected_result"],
                 ["environment", "Environment", "textarea", "environment"], ["root_cause", "Root cause (suspected)", "textarea", "root_cause"], ["fix", "Suggested fix", "textarea", "suggested_fix"]];
-  var CHOICES = [["flaky", "Flaky test, no ticket needed"], ["environment", "Environment problem"], ["test_data", "Test data problem"],
+  var CHOICES = [["flaky", "Flaky test, no ticket needed"], ["environment", "Environment problem"], ["test_data", "Test data problem (the setup data, not the code)"],
                  ["test_bug", "Test bug, no ticket needed"], ["already_fixed", "Already fixed"], ["wont_fix", "Won't fix"],
                  ["not_a_bug", "Not a bug"], ["duplicate", "Duplicate of an existing ticket"]];
   var boardName = {{board_json}};

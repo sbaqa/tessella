@@ -64,11 +64,16 @@ def _image(path: str) -> str | None:
 
 # The choices under each draft, as links into Tessella on the reviewer's machine (or a team's
 # own dashboard). Each opens a confirmation there; nothing changes until the reviewer confirms.
-_ACTIONS = (("approve", "Approve and file"), ("edit", "Edit first"), ("reject:flaky", "Flaky"),
-            ("reject:already_fixed", "Already fixed"), ("reject:wont_fix", "Won't fix"),
-            ("reject:not_a_bug", "Not a bug"), ("reject:duplicate", "Duplicate"),
-            ("reject:test_bug", "Test bug, no ticket"), ("reject:environment", "Environment"),
-            ("reject:test_data", "Test data"))
+_ACTIONS = (("approve", "Approve and file", "File this ticket to the board"),
+            ("edit", "Edit first", "Change the ticket before filing it"),
+            ("reject:flaky", "Flaky", "It passes on a re-run: track the test, not a bug"),
+            ("reject:already_fixed", "Already fixed", "A real bug, fixed since: nothing to file"),
+            ("reject:wont_fix", "Won't fix", "A real bug the team chose not to fix"),
+            ("reject:not_a_bug", "Not a bug", "The test expected the wrong thing"),
+            ("reject:duplicate", "Duplicate", "Already on the board as another ticket"),
+            ("reject:test_bug", "Test bug, no ticket", "The test itself is wrong, fixed without a ticket"),
+            ("reject:environment", "Environment problem", "A server, network or setup problem, not the code"),
+            ("reject:test_data", "Test data problem", "The test's setup data was wrong, not the code"))
 
 
 def _actions(case: Case, run: str | None, base: str) -> str:
@@ -76,8 +81,8 @@ def _actions(case: Case, run: str | None, base: str) -> str:
 
     links = "".join(
         f'<a{" class=go" if i == 0 else ""} href="{escape(base)}/review?run={quote(run or "", safe="")}'
-        f'&amp;case={quote(case.id, safe="")}&amp;decide={quote(key, safe=":")}">{escape(label)}</a>'
-        for i, (key, label) in enumerate(_ACTIONS) if key != "approve" or case.draft)
+        f'&amp;case={quote(case.id, safe="")}&amp;decide={quote(key, safe=":")}" title="{escape(hint)}">{escape(label)}</a>'
+        for i, (key, label, hint) in enumerate(_ACTIONS) if key != "approve" or case.draft)
     return f'<div class="act">{links}</div>'
 
 
@@ -128,4 +133,4 @@ def render(digest: dict, store: Store, ctx: dict, run: str | None, links: list[t
             f'<div class="all"><p>{escape(digest["headline"] or "")}</p><nav>{nav}</nav>'
             + (f'<ol class="toc">{"".join(toc)}</ol>' if toc else "") + "</div>"
             + "".join(sections)
-            + "<p>Read-only. Nothing is filed to the board without a person approving it.</p></main></body></html>")
+            + "<p>Nothing is filed to the board until a person approves it.</p></main></body></html>")
