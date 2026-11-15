@@ -314,7 +314,7 @@ def drafts(digest: Path = typer.Argument(..., help="The file tessella ci --diges
             folder=ci_comment.repo_folder(s.inputs.repo), at=datetime.now().isoformat())
         out.write_text(page.render(json.loads(digest.read_text(encoding="utf-8")), Store(s.storage.path),
                                    ci_comment.context(), run, links,
-                                   s.ci.queue_url or "http://127.0.0.1:8484", online), encoding="utf-8")
+                                   s.ci.queue_url or "", online), encoding="utf-8")
         console.print(f"Drafts written to [bold]{out}[/]")
     except Exception as exc:  # CI must never fail the build because of Tessella
         console.print(f"[red]Tessella error:[/] {exc}")

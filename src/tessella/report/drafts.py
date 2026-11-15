@@ -65,10 +65,9 @@ def _image(path: str) -> str | None:
         return None  # the draft still reads without its picture
 
 
-# The choices under each draft, as links into Tessella on the reviewer's machine (or a team's
-# own dashboard). Each opens a confirmation there; nothing changes until the reviewer confirms.
+# The choices under each draft. They open Jira or GitHub, never this machine: the page is read
+# from an email, where nothing local can be assumed to be running.
 _ACTIONS = (("approve", "Approve and file", "File this ticket to the board"),
-            ("edit", "Edit first", "Change the ticket before filing it"),
             ("reject:flaky", "Flaky", "It passes on a re-run: track the test, not a bug"),
             ("reject:already_fixed", "Already fixed", "A real bug, fixed since: nothing to file"),
             ("reject:wont_fix", "Won't fix", "A real bug the team chose not to fix"),
@@ -112,39 +111,52 @@ def _jira_create(case: Case, online: Online) -> str | None:
     return f"{online.jira_url.rstrip('/')}/secure/CreateIssueDetails!init.jspa?{urlencode(params)}"
 
 
-def _commit_decision(case: Case, reason: str, online: Online) -> str | None:
+def _commit_decision(case: Case, action: str, reason: str, online: Online) -> str | None:
     """GitHub's page for a new file holding this one decision. Committing it records the
-    decision where CI and every teammate read it."""
+    decision where CI and every teammate read it. An approval made this way waits as pending
+    and is filed the next time a dashboard with the board's token opens."""
     from urllib.parse import quote, urlencode
 
     if not (online.github and online.branch):
         return None
-    entry = {"case_id": case.id, "signature": case.signature, "action": "reject", "reason": reason,
-             "at": online.at}
-    name = f"{online.folder}{FOLDER}/{case.id}-{(case.signature or 'x')[:8]}-{reason}.json"
+    entry = {"case_id": case.id, "signature": case.signature, "action": action, "at": online.at}
+    if action == "approve":
+        entry["pending"] = True
+    else:
+        entry["reason"] = reason
+    name = f"{online.folder}{FOLDER}/{case.id}-{(case.signature or 'x')[:8]}-{reason or action}.json"
     return (f"{online.github}/new/{quote(online.branch, safe='')}?"
             + urlencode({"filename": name, "value": json.dumps(entry, indent=2) + "\n"}))
 
 
 def _actions(case: Case, run: str | None, base: str, online: Online | None = None) -> str:
-    from urllib.parse import quote
-
+    """Approve opens Jira's Create page (editable there before Create), or, without Jira set up,
+    commits a pending approval on GitHub. The rest commit their decision on GitHub. A choice
+    with neither goes to a team's dashboard server if one is set, or is left out: the page
+    never links to this machine."""
     online = online or Online()
     links = []
     for key, label, hint in _ACTIONS:
         if key == "approve" and not case.draft:
             continue
         action, _, reason = key.partition(":")
-        url = (_jira_create(case, online) if action == "approve" else
-               _commit_decision(case, reason, online) if action == "reject" else None)
-        url = url or (f"{base}/review?run={quote(run or '', safe='')}&case={quote(case.id, safe='')}"
-                      f"&decide={quote(key, safe=':')}")
+        jira = _jira_create(case, online) if action == "approve" else None
+        url = jira or _commit_decision(case, action, reason, online)
+        if not url and base:  # a team's own dashboard server, never this machine's
+            from urllib.parse import quote
+
+            url = (f"{base}/review?run={quote(run or '', safe='')}&case={quote(case.id, safe='')}"
+                   f"&decide={quote(key, safe=':')}")
+        if not url:
+            continue
+        if jira:
+            label, hint = "Review and file in Jira", "Opens Jira's Create page filled in: edit anything, then click Create"
         links.append(f'<a{" class=go" if not links else ""} href="{escape(url, quote=True)}" '
                      f'title="{escape(hint)}" target="_blank" rel="noopener">{escape(label)}</a>')
-    return f'<div class="act">{"".join(links)}</div>'
+    return f'<div class="act">{"".join(links)}</div>' if links else ""
 
 
-def _section(case: Case, row: dict, run: str | None, base: str = "http://127.0.0.1:8484",
+def _section(case: Case, row: dict, run: str | None, base: str = "",
              online: Online | None = None) -> str:
     v, d = case.verdict, case.draft
     kind = _LABEL.get(str(v.category), "Not analysed") if v else "Not analysed"
@@ -176,15 +188,20 @@ def _how(case: Case, online: Online | None) -> str:
     online = online or Online()
     parts = []
     if _jira_create(case, online):
-        parts.append("Approve opens Jira's Create page with this ticket filled in: check it and click Create.")
+        parts.append("Review and file opens Jira's Create page with this ticket filled in: change "
+                     "anything there, then click Create.")
+    elif online.github and case.draft:
+        parts.append("Approve commits your approval through GitHub; the ticket is filed the next time "
+                     "your Tessella dashboard opens with Jira connected.")
     if online.github:
-        parts.append("The others commit your decision to the repository through GitHub, so CI and your team see it.")
-    parts.append("Anything that opens Tessella on your machine needs it running:")
+        parts.append("The other buttons commit your decision to the repository through GitHub, so CI "
+                     "and your team see it.")
+    parts.append("To edit or decide in your own Tessella dashboard instead, run:")
     return " ".join(parts)
 
 
 def render(digest: dict, store: Store, ctx: dict, run: str | None, links: list[tuple[str, str]],
-           base: str = "http://127.0.0.1:8484", online: Online | None = None) -> str:
+           base: str = "", online: Online | None = None) -> str:
     """The page, for the failures of this run that still need a person."""
     sections, toc = [], []
     for row in digest["rows"]:

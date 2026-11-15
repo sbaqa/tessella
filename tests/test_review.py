@@ -623,7 +623,7 @@ def test_each_draft_link_shows_that_draft_alone_with_its_decisions(tmp_path):
                          "https://github.com/o/r/actions/runs/9", [], "https://tessella.lan:8484/")
     assert "body:has(section:target) section:not(:target)" in page and "<script" not in page
     assert 'href="https://tessella.lan:8484/review?run=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Factions%2Fruns%2F9&amp;case=c1&amp;decide=reject:already_fixed"' in page
-    for label in ("Approve and file", "Edit first", "Flaky", "Already fixed", "Won't fix", "Not a bug", "Duplicate"):
+    for label in ("Approve and file", "Flaky", "Already fixed", "Won't fix", "Not a bug", "Duplicate"):
         assert label in page.replace("&#x27;", "'")
 
 
@@ -653,12 +653,14 @@ def test_draft_buttons_go_to_jira_and_github_when_set_up(tmp_path):
     assert q["filename"] == ["app/tessella-decisions/c1-sig-flaky.json"]
     assert json.loads(q["value"][0]) == {"case_id": "c1", "signature": "sig", "action": "reject", "reason": "flaky",
                                          "at": "2026-11-15T10:00:00"}
-    edit = next(x for x in hrefs if "decide=edit" in x)
-    assert edit.startswith("http://127.0.0.1:8484/review?")  # editing needs the dashboard
-    assert "Approve opens Jira" in page
+    assert not any("127.0.0.1" in x or "localhost" in x for x in hrefs)  # never this machine
+    assert "Review and file in Jira" in page and "Edit first" not in page
 
 
-def test_without_jira_ids_or_github_the_buttons_open_tessella(tmp_path):
+def test_without_jira_an_approval_is_committed_as_pending_and_nothing_links_here(tmp_path):
+    import html as h
+    from urllib.parse import parse_qs, urlsplit
+
     from tessella.draft.ticket import ticket
     from tessella.report import drafts
 
@@ -666,8 +668,15 @@ def test_without_jira_ids_or_github_the_buttons_open_tessella(tmp_path):
     case = _case()
     case.draft = ticket(case)
     store.save_case(case)
-    page = drafts.render({"headline": "", "rows": [{"case_id": "c1", "open": True}]}, store, {}, None, [])
-    assert "CreateIssueDetails" not in page and "github.com" not in page and "decide=approve" in page
+    rows = {"headline": "", "rows": [{"case_id": "c1", "open": True}]}
+    github = drafts.Online(github="https://github.com/o/r", branch="main", at="2026-11-15T10:00:00")
+    page = drafts.render(rows, store, {}, None, [], online=github)
+    hrefs = [h.unescape(x) for x in __import__("re").findall(r'href="([^"]+)"', page)]
+    approve = next(x for x in hrefs if "approve.json" in x)
+    assert json.loads(parse_qs(urlsplit(approve).query)["value"][0])["pending"] is True
+    assert not any("127.0.0.1" in x for x in hrefs)
+    bare = drafts.render(rows, store, {}, None, [])
+    assert 'class="act"' not in bare and "127.0.0.1" not in bare and "tessella review" in bare
 
 
 def test_decision_files_committed_on_github_are_read_and_forgotten(tmp_path, real_file):
