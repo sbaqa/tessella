@@ -19,6 +19,7 @@
 - Each Open draft link shows only that draft, with buttons to approve, edit, or mark it flaky, already fixed, won't fix, not a bug, a duplicate and more. They open Tessella on your machine to confirm.
 - An approval made before a board was set up can be filed later from its panel, and any decision can be taken back.
 - New reasons: already fixed, won't fix.
+- On the drafts page, Approve opens Jira's Create page filled in, and the other decisions commit a small file through GitHub, so neither needs Tessella running. The dashboard marks a ticket created that way as filed.
 
 ### Changed
 - The CI triage has no time limit by default; it runs to the end.

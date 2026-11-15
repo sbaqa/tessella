@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -290,7 +291,11 @@ def ci(reports: list[str] = typer.Argument(None), cfg: Optional[Path] = typer.Op
 def drafts(digest: Path = typer.Argument(..., help="The file tessella ci --digest wrote."),
            out: Path = typer.Option(Path("tessella-drafts.html"), "--out", "-o"),
            cfg: Optional[Path] = typer.Option(None, "--config", "-c"),
-           link: list[str] = typer.Option([], "--link", help="A report to link, as NAME=URL. Repeat it.")):
+           link: list[str] = typer.Option([], "--link", help="A report to link, as NAME=URL. Repeat it."),
+           jira_url: Optional[str] = typer.Option(None, "--jira-url", help="Approve opens this Jira's Create page (default: jira.url)."),
+           jira_project_id: Optional[str] = typer.Option(None, "--jira-project-id", help="Numeric project ID (default: jira.project_id; tessella doctor --board prints it)."),
+           jira_issue_type_id: Optional[str] = typer.Option(None, "--jira-issue-type-id", help="Numeric issue type ID (default: jira.issue_type_id)."),
+           decisions_branch: Optional[str] = typer.Option(None, "--decisions-branch", help="On GitHub, other decisions are committed to this branch.")):
     """Write one plain page with every ticket draft of a CI run, to publish next to its reports. Always exits 0."""
     from tessella.integrations import ci_comment
     from tessella.memory.store import Store
@@ -302,9 +307,14 @@ def drafts(digest: Path = typer.Argument(..., help="The file tessella ci --diges
         links = [tuple(x.split("=", 1)) for x in link if "=" in x and x.split("=", 1)[1]]
         if run:
             links.append(("CI run", run))
+        online = page.Online(
+            jira_url=jira_url or s.jira.url or "", project_id=jira_project_id or s.jira.project_id or "",
+            issue_type_id=jira_issue_type_id or s.jira.issue_type_id or "",
+            github=ci_comment.repo_url() or "", branch=decisions_branch or "",
+            folder=ci_comment.repo_folder(s.inputs.repo), at=datetime.now().isoformat())
         out.write_text(page.render(json.loads(digest.read_text(encoding="utf-8")), Store(s.storage.path),
                                    ci_comment.context(), run, links,
-                                   s.ci.queue_url or "http://127.0.0.1:8484"), encoding="utf-8")
+                                   s.ci.queue_url or "http://127.0.0.1:8484", online), encoding="utf-8")
         console.print(f"Drafts written to [bold]{out}[/]")
     except Exception as exc:  # CI must never fail the build because of Tessella
         console.print(f"[red]Tessella error:[/] {exc}")

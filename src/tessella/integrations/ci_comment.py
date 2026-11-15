@@ -215,6 +215,29 @@ def context(env: dict[str, str] | None = None) -> dict[str, str]:
     return {"repo": "", "branch": "", "commit": "", "change": "", "change_url": ""}
 
 
+def repo_url(env: dict[str, str] | None = None) -> str | None:
+    """The repository's page on GitHub, where a decision file can be committed."""
+    env = dict(os.environ if env is None else env)
+    if env.get("GITHUB_ACTIONS") == "true" and env.get("GITHUB_REPOSITORY"):
+        return f"{env.get('GITHUB_SERVER_URL', 'https://github.com').rstrip('/')}/{env['GITHUB_REPOSITORY']}"
+    return None
+
+
+def repo_folder(repo: str, env: dict[str, str] | None = None) -> str:
+    """Where `inputs.repo` sits inside the checkout, as a path prefix ("" at its root)."""
+    from pathlib import Path
+
+    env = dict(os.environ if env is None else env)
+    top = env.get("GITHUB_WORKSPACE")
+    if not top:
+        return ""
+    try:
+        rel = Path(repo).resolve().relative_to(Path(top).resolve()).as_posix()
+    except ValueError:
+        return ""
+    return "" if rel == "." else rel + "/"
+
+
 def run_url(env: dict[str, str] | None = None) -> str | None:
     """This CI run's page, where the uploaded reports are."""
     env = dict(os.environ if env is None else env)

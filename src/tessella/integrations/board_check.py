@@ -45,10 +45,15 @@ def jira(s: Settings) -> list[Check]:
             out.append(Check("project", False, f"project {j.project} not found or not visible "
                                                f"({r.status_code}); use the project KEY"))
             return out
-        types = [t["name"] for t in r.json().get("issueTypes", [])]
+        project = r.json()
+        types = [t["name"] for t in project.get("issueTypes", [])]
         out.append(Check("project", True, j.project))
         if j.issue_type in types:
             out.append(Check("issue type", True, j.issue_type))
+            type_id = next(t["id"] for t in project["issueTypes"] if t["name"] == j.issue_type)
+            out.append(Check("ids for the drafts page", None,
+                             f"jira.project_id: \"{project.get('id')}\", jira.issue_type_id: \"{type_id}\" "
+                             "(or the JIRA_PROJECT_ID and JIRA_ISSUE_TYPE_ID variables in CI)"))
         else:
             out.append(Check("issue type", False, f"'{j.issue_type}' is not one of: {', '.join(types)}"))
     except (OSError, ValueError, RuntimeError) as exc:

@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import base64
 import io
+import json
+from dataclasses import dataclass
 from html import escape
 from pathlib import Path
 
+from tessella.memory.decisions_file import FOLDER
 from tessella.memory.store import Store
 from tessella.models import Case
 
@@ -76,17 +79,73 @@ _ACTIONS = (("approve", "Approve and file", "File this ticket to the board"),
             ("reject:test_data", "Test data problem", "The test's setup data was wrong, not the code"))
 
 
-def _actions(case: Case, run: str | None, base: str) -> str:
+@dataclass
+class Online:
+    """Where the buttons act without Tessella running: Jira's own create page for Approve, and
+    GitHub's new-file page to commit any other decision. Each part is optional."""
+
+    jira_url: str = ""
+    project_id: str = ""
+    issue_type_id: str = ""
+    github: str = ""  # https://github.com/owner/repo
+    branch: str = ""
+    folder: str = ""  # where decision files go, from the repository root
+    at: str = ""  # when the page was made: the decision's time
+
+
+def _jira_create(case: Case, online: Online) -> str | None:
+    """Jira's "Create issue" page with this draft filled in and Tessella's label, so the ticket
+    is known as this failure's. The person still checks it and clicks Create."""
+    from urllib.parse import urlencode
+
+    from tessella.integrations.jira import _label
+
+    d = case.draft
+    if not (d and online.jira_url and online.project_id and online.issue_type_id):
+        return None
+    # Plain text: Jira's create page shows wiki or Markdown marks literally.
+    fields = "\n\n".join(f"{label}:\n{getattr(d, name) or 'Not available'}" for label, name in _FIELDS)
+    params = [("pid", online.project_id), ("issuetype", online.issue_type_id), ("summary", d.title[:250]),
+              ("description", fields[:6000]), ("labels", "tessella")]
+    if case.signature:
+        params.append(("labels", _label(case.signature)))
+    return f"{online.jira_url.rstrip('/')}/secure/CreateIssueDetails!init.jspa?{urlencode(params)}"
+
+
+def _commit_decision(case: Case, reason: str, online: Online) -> str | None:
+    """GitHub's page for a new file holding this one decision. Committing it records the
+    decision where CI and every teammate read it."""
+    from urllib.parse import quote, urlencode
+
+    if not (online.github and online.branch):
+        return None
+    entry = {"case_id": case.id, "signature": case.signature, "action": "reject", "reason": reason,
+             "at": online.at}
+    name = f"{online.folder}{FOLDER}/{case.id}-{(case.signature or 'x')[:8]}-{reason}.json"
+    return (f"{online.github}/new/{quote(online.branch, safe='')}?"
+            + urlencode({"filename": name, "value": json.dumps(entry, indent=2) + "\n"}))
+
+
+def _actions(case: Case, run: str | None, base: str, online: Online | None = None) -> str:
     from urllib.parse import quote
 
-    links = "".join(
-        f'<a{" class=go" if i == 0 else ""} href="{escape(base)}/review?run={quote(run or "", safe="")}'
-        f'&amp;case={quote(case.id, safe="")}&amp;decide={quote(key, safe=":")}" title="{escape(hint)}">{escape(label)}</a>'
-        for i, (key, label, hint) in enumerate(_ACTIONS) if key != "approve" or case.draft)
-    return f'<div class="act">{links}</div>'
+    online = online or Online()
+    links = []
+    for key, label, hint in _ACTIONS:
+        if key == "approve" and not case.draft:
+            continue
+        action, _, reason = key.partition(":")
+        url = (_jira_create(case, online) if action == "approve" else
+               _commit_decision(case, reason, online) if action == "reject" else None)
+        url = url or (f"{base}/review?run={quote(run or '', safe='')}&case={quote(case.id, safe='')}"
+                      f"&decide={quote(key, safe=':')}")
+        links.append(f'<a{" class=go" if not links else ""} href="{escape(url, quote=True)}" '
+                     f'title="{escape(hint)}" target="_blank" rel="noopener">{escape(label)}</a>')
+    return f'<div class="act">{"".join(links)}</div>'
 
 
-def _section(case: Case, row: dict, run: str | None, base: str = "http://127.0.0.1:8484") -> str:
+def _section(case: Case, row: dict, run: str | None, base: str = "http://127.0.0.1:8484",
+             online: Online | None = None) -> str:
     v, d = case.verdict, case.draft
     kind = _LABEL.get(str(v.category), "Not analysed") if v else "Not analysed"
     sure = f", {v.confidence:.0%} sure" if v and v.confidence else ""
@@ -107,20 +166,32 @@ def _section(case: Case, row: dict, run: str | None, base: str = "http://127.0.0
     return (f'<section id="case-{escape(case.id, quote=True)}" class="{escape(str(v.category) if v else "none", quote=True)}">'
             f'<div class="kind">{escape(kind)}{sure}</div><h2>{escape(title)}</h2>'
             f'<p class="test">{escape(case.title)}</p>{body}{shots}{patch}'
-            f'<h3>Decide</h3>{_actions(case, run, base)}'
-            f'<p class="hint">These open Tessella on your machine to confirm. Start it first with:</p>'
+            f'<h3>Decide</h3>{_actions(case, run, base, online)}'
+            f'<p class="hint">{_how(case, online)}</p>'
             f'<code class="cmd">{escape(command)}</code></section>')
 
 
+def _how(case: Case, online: Online | None) -> str:
+    """What the buttons do, in one line, since some go to Jira, some to GitHub, some here."""
+    online = online or Online()
+    parts = []
+    if _jira_create(case, online):
+        parts.append("Approve opens Jira's Create page with this ticket filled in: check it and click Create.")
+    if online.github:
+        parts.append("The others commit your decision to the repository through GitHub, so CI and your team see it.")
+    parts.append("Anything that opens Tessella on your machine needs it running:")
+    return " ".join(parts)
+
+
 def render(digest: dict, store: Store, ctx: dict, run: str | None, links: list[tuple[str, str]],
-           base: str = "http://127.0.0.1:8484") -> str:
+           base: str = "http://127.0.0.1:8484", online: Online | None = None) -> str:
     """The page, for the failures of this run that still need a person."""
     sections, toc = [], []
     for row in digest["rows"]:
         case = store.get_case(row["case_id"]) if row.get("open") else None
         if case is None:
             continue
-        sections.append(_section(case, row, run, base.rstrip("/")))
+        sections.append(_section(case, row, run, base.rstrip("/"), online))
         toc.append(f'<li><a href="#case-{escape(case.id, quote=True)}">{escape(case.title)}</a></li>')
     where = " · ".join(escape(v) for v in (ctx.get("repo"), ctx.get("change"), ctx.get("branch"), ctx.get("commit")) if v)
     nav = "".join(f'<a href="{escape(url, quote=True)}">{escape(name)}</a>' for name, url in links)

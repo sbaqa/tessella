@@ -173,6 +173,10 @@ class Jira(BaseModel):
     email: str | None = None
     token_env: str = "JIRA_TOKEN"
     issue_type: str = "Bug"  # must match an issue type that exists in the project
+    # Jira's prefilled "Create issue" page (the drafts page's Approve button) takes numeric IDs.
+    # `tessella doctor --board` prints both. Not secret.
+    project_id: str | None = None
+    issue_type_id: str | None = None
     # Duplicate search: during triage, issues in the project that read like a drafted
     # failure are listed on the draft as possible duplicates (never skipped or linked).
     # duplicate_threshold: cosine similarity, when models.embedder is set; otherwise

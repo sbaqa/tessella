@@ -56,6 +56,9 @@ jobs:
         with:
           working-directory: examples/demo_shop
           links: Allure report=${{ steps.allure.outputs.artifact-url }}
+          jira-url: ${{ vars.JIRA_URL }}
+          jira-project-id: ${{ vars.JIRA_PROJECT_ID }}
+          jira-issue-type-id: ${{ vars.JIRA_ISSUE_TYPE_ID }}
           email-to: ${{ secrets.TESSELLA_EMAIL_TO }}
           smtp-host: ${{ vars.SMTP_HOST }}
           smtp-username: ${{ secrets.SMTP_USERNAME }}

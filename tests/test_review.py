@@ -625,3 +625,88 @@ def test_each_draft_link_shows_that_draft_alone_with_its_decisions(tmp_path):
     assert 'href="https://tessella.lan:8484/review?run=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Factions%2Fruns%2F9&amp;case=c1&amp;decide=reject:already_fixed"' in page
     for label in ("Approve and file", "Edit first", "Flaky", "Already fixed", "Won't fix", "Not a bug", "Duplicate"):
         assert label in page.replace("&#x27;", "'")
+
+
+def test_draft_buttons_go_to_jira_and_github_when_set_up(tmp_path):
+    from urllib.parse import parse_qs, urlsplit
+
+    from tessella.draft.ticket import ticket
+    from tessella.report import drafts
+
+    store = Store(tmp_path / "s.sqlite")
+    case = _case()
+    case.draft = ticket(case)
+    store.save_case(case)
+    online = drafts.Online(jira_url="https://acme.atlassian.net", project_id="10000", issue_type_id="10003",
+                           github="https://github.com/o/r", branch="main", folder="app/", at="2026-11-15T10:00:00")
+    page = drafts.render({"headline": "", "rows": [{"case_id": "c1", "open": True}]}, store, {}, None, [],
+                         online=online)
+    import html as h
+    hrefs = [h.unescape(x) for x in __import__("re").findall(r'href="([^"]+)"', page)]
+    jira = next(x for x in hrefs if "CreateIssueDetails" in x)
+    q = parse_qs(urlsplit(jira).query)
+    assert q["pid"] == ["10000"] and q["issuetype"] == ["10003"] and q["labels"] == ["tessella", "tessella-sig"]
+    assert "Root cause (suspected):\nrounding" in q["description"][0] and "*" not in q["description"][0]
+    flaky = next(x for x in hrefs if "reason%22%3A+%22flaky" in x or "flaky.json" in x)
+    q = parse_qs(urlsplit(flaky).query)
+    assert flaky.startswith("https://github.com/o/r/new/main?")
+    assert q["filename"] == ["app/tessella-decisions/c1-sig-flaky.json"]
+    assert json.loads(q["value"][0]) == {"case_id": "c1", "signature": "sig", "action": "reject", "reason": "flaky",
+                                         "at": "2026-11-15T10:00:00"}
+    edit = next(x for x in hrefs if "decide=edit" in x)
+    assert edit.startswith("http://127.0.0.1:8484/review?")  # editing needs the dashboard
+    assert "Approve opens Jira" in page
+
+
+def test_without_jira_ids_or_github_the_buttons_open_tessella(tmp_path):
+    from tessella.draft.ticket import ticket
+    from tessella.report import drafts
+
+    store = Store(tmp_path / "s.sqlite")
+    case = _case()
+    case.draft = ticket(case)
+    store.save_case(case)
+    page = drafts.render({"headline": "", "rows": [{"case_id": "c1", "open": True}]}, store, {}, None, [])
+    assert "CreateIssueDetails" not in page and "github.com" not in page and "decide=approve" in page
+
+
+def test_decision_files_committed_on_github_are_read_and_forgotten(tmp_path, real_file):
+    s = _settings(tmp_path)
+    folder = tmp_path / "tessella-decisions"
+    folder.mkdir()
+    (folder / "c1-sig-flaky.json").write_text(json.dumps(
+        {"case_id": "c1", "signature": "sig", "action": "reject", "reason": "flaky", "at": NOW.isoformat()}))
+    (folder / "broken.json").write_text("{")
+    store = Store(s.storage.path)
+    assert decisions_file.load(s, store) == 1
+    assert store.last_decision("sig").reason == RejectReason.flaky
+    decisions_file.remove(s, "sig")
+    assert not list(folder.glob("c1-*"))
+
+
+def test_the_dashboard_marks_a_ticket_created_in_jira_as_filed(tmp_path, monkeypatch):
+    from starlette.testclient import TestClient
+
+    from tessella import pipeline
+    from tessella.draft.ticket import ticket
+    from tessella.queue.app import create_app
+
+    s = Settings()
+    s.storage.path = str(tmp_path / "s.sqlite")
+    store = Store(s.storage.path)
+    case = _case()
+    case.draft = ticket(case)
+    store.save_case(case)
+    monkeypatch.setattr(pipeline, "_filed_on_board", lambda settings, sig: Decision(
+        action=Action.approve, by="", at=NOW, board="jira", ticket_key="KAN-11", ticket_url="https://j/KAN-11"))
+    TestClient(create_app(s)).get("/")
+    assert store.last_decision("sig").ticket_key == "KAN-11" and not store.open_cases()
+
+
+def test_repo_folder_and_url():
+    from tessella.integrations import ci_comment
+
+    env = {"GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": "o/r", "GITHUB_WORKSPACE": "/w"}
+    assert ci_comment.repo_url(env) == "https://github.com/o/r"
+    assert ci_comment.repo_folder("/w/examples/demo", env) == "examples/demo/"
+    assert ci_comment.repo_folder("/w", env) == "" and ci_comment.repo_folder("/elsewhere", env) == ""

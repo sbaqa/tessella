@@ -89,6 +89,8 @@ jira:
   url: https://jira.example.com
   project: QA
   token_env: JIRA_TOKEN
+  # project_id: "10000"          # for the drafts page's Approve button (tessella doctor --board)
+  # issue_type_id: "10003"
   # Duplicate search: each new draft lists issues already in the project that read like it
   # (possible duplicates for the reviewer; nothing is skipped or linked automatically).
   search_duplicates: true

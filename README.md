@@ -1232,6 +1232,13 @@ tessella review https://github.com/acme/app/actions/runs/123
 It downloads the `tessella-db` artifact, merges it into your local database, starts the review
 queue and opens your browser. To read first, each failure in the email has **Open draft**: the full ticket
 on a plain page published with the run (`tessella drafts`, then `tessella notify --drafts-url`).
+
+Each draft there has its decisions as buttons. **Approve and file** opens Jira's own Create page with
+the ticket filled in and Tessella's label, once the action has `jira-url`, `jira-project-id` and
+`jira-issue-type-id` (`tessella doctor --board` prints the two IDs); you check it and click Create, and
+the dashboard marks that failure filed when it next opens. **Flaky**, **Already fixed**, **Won't fix**
+and the rest open GitHub's new-file page with that one decision filled in: committing it records the
+decision in `tessella-decisions/`, which CI and your team read. **Edit first** opens your dashboard.
 A run link needs a token from the environment, used only for that provider:
 
 | CI | Link it reads | Token |

@@ -39,12 +39,37 @@ def _write(path: Path, entries: list[dict]) -> None:
     path.write_text("".join(json.dumps(e, sort_keys=True) + "\n" for e in ordered), encoding="utf-8")
 
 
-def load(settings: Settings, store: Store) -> int:
-    """Bring the committed decisions into the store. Returns how many were new."""
+FOLDER = "tessella-decisions"  # one small file per decision, made from the drafts page on GitHub
+
+
+def folder(settings: Settings) -> Path | None:
     path = _path(settings)
-    if path is None or not path.is_file():
+    return path.parent / FOLDER if path is not None else None
+
+
+def _read_folder(where: Path) -> list[dict]:
+    entries = []
+    for f in sorted(where.glob("*.json")):
+        try:
+            entry = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(entry, dict) and {"case_id", "signature", "action", "at"} <= entry.keys():
+            entries.append(entry)
+    return entries
+
+
+def load(settings: Settings, store: Store) -> int:
+    """Bring the committed decisions into the store: the file a laptop writes, and the small
+    files the drafts page commits. Returns how many were new."""
+    path = _path(settings)
+    if path is None:
         return 0
-    return store.import_decisions(_read(path))
+    entries = _read(path) if path.is_file() else []
+    where = folder(settings)
+    if where is not None and where.is_dir():
+        entries += _read_folder(where)
+    return store.import_decisions(entries) if entries else 0
 
 
 def save(settings: Settings, case: Case, decision: Decision) -> None:
@@ -71,9 +96,15 @@ def save(settings: Settings, case: Case, decision: Decision) -> None:
 def remove(settings: Settings, signature: str) -> None:
     """Drop a failure's lines when its decision is forgotten, so triage cannot restore it."""
     path = _path(settings)
-    if path is None or not path.is_file():
+    if path is None:
         return
     try:
-        _write(path, [e for e in _read(path) if e["signature"] != signature])
+        if path.is_file():
+            _write(path, [e for e in _read(path) if e["signature"] != signature])
+        where = folder(settings)
+        if where is not None and where.is_dir():
+            for f in where.glob("*.json"):
+                if signature in f.read_text(encoding="utf-8"):
+                    f.unlink()
     except OSError:
         pass

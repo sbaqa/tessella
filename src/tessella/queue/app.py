@@ -93,6 +93,15 @@ def create_app(settings: Settings):
             if _ticket_gone(settings, decision):
                 store.forget(case.signature)
                 decisions_file.remove(settings, case.signature)
+        # A ticket someone created in Jira from the drafts page carries the failure's label.
+        from tessella.pipeline import _filed_on_board
+
+        for case in [c for c in store.open_cases() if c.draft][:25]:
+            filed = _filed_on_board(settings, case.signature)
+            if filed is not None:
+                filed.by = "Jira"
+                store.record(case, filed)
+                decisions_file.save(settings, case, filed)
 
     def _file(case):
         """File a case's draft on the board. Screenshots leave the machine here."""
