@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sbaqa/tessella/actions/workflows/ci.yml"><img alt="Tests" src="https://github.com/sbaqa/tessella/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/sbqeng/tessella/actions/workflows/ci.yml"><img alt="Tests" src="https://github.com/sbqeng/tessella/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Licence: Apache-2.0" src="https://img.shields.io/badge/licence-Apache--2.0-2546a8">
   <img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-17766f">
   <img alt="Runs locally" src="https://img.shields.io/badge/models-run%20locally-c48d12">
@@ -30,7 +30,7 @@
   <img src="docs/media/hero.gif" alt="Nine steps: the email, a failure, its draft, the test in Allure, filing in Jira, marking a flaky test, committing the decision, the dashboard" width="880">
 </p>
 
-<p align="center"><a href="docs/media/tessella-story.webm"><b>▶ Watch Maya's Monday (1 minute)</b></a>: 40 red tests, a lost morning, and the Monday after Tessella.</p>
+<p align="center"><a href="docs/media/tessella-story.webm"><b>▶ Watch Maya's Monday (2.5 minutes)</b></a>: 357 of 2,354 tests fail overnight, the release slips to Thursday, and one night with Tessella brings it back to Tuesday.</p>
 
 A nightly run fails 40 tests, and someone loses a morning working out which are real bugs, which are broken tests and which are the same problem 15 times. AI could help, but in many companies logs and code may not leave the building. Tessella does that investigation **inside your network**, on a small local model, and backs every conclusion with evidence you can check.
 
@@ -106,7 +106,7 @@ Real screens from the included demo shop, on a small local model.
 You need Python 3.12 and the [Allure command line](https://allurereport.org/docs/install/). This runs the demo shop's tests and shows the failures in the dashboard:
 
 ```bash
-git clone https://github.com/sbaqa/tessella && cd tessella
+git clone https://github.com/sbqeng/tessella && cd tessella
 python3 -m venv venv && source venv/bin/activate && pip install -e ".[all,dev]"
 cd examples/demo_shop && pip install -r requirements.txt
 playwright install chromium && cp tessella.example.yaml tessella.yaml
@@ -1172,7 +1172,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # ... install your project and run your tests ...
-      - uses: sbaqa/tessella@master
+      - uses: sbqeng/tessella@master
         if: failure()
 ```
 
@@ -1191,7 +1191,7 @@ pass your own uploads with `links`, one `NAME=URL` per line, and set `email-to` 
 - id: allure                        # one file: allure generate --single-file
   uses: actions/upload-artifact@v7
   with: { path: allure-report.html, archive: false }
-- uses: sbaqa/tessella@master
+- uses: sbqeng/tessella@master
   if: failure()
   with:
     links: Allure report=${{ steps.allure.outputs.artifact-url }}
@@ -1219,7 +1219,7 @@ judge with a model, or add `--no-model`:
 - name: Investigate failures with Tessella
   if: failure()
   run: |
-    pip install "tessella[llm,vision] @ git+https://github.com/sbaqa/tessella"
+    pip install "tessella[llm,vision] @ git+https://github.com/sbqeng/tessella"
     tessella ci playwright-report/ test-results/*.xml
 ```
 
