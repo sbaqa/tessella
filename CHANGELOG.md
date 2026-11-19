@@ -4,7 +4,7 @@
 
 ### Added
 - Edit a ticket draft in the review queue before filing: every field and the title, marked as edited, with undo. A later triage keeps a reviewer's words.
-- A GitHub Action (`uses: sbaqa/tessella@master`) that runs a real local model on the runner, triages the failures, comments on the pull request and uploads the report.
+- A GitHub Action (`uses: sbqeng/tessella@master`) that runs a real local model on the runner, triages the failures, comments on the pull request and uploads the report.
 - `tessella ci --minutes`: a time limit for the model, so a slow runner reports what it did not reach.
 
 - `tessella notify`: a structured email, the PR comment and the CI Summary page, each with direct links to the reports stored on the CI run.

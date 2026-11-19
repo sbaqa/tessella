@@ -6,7 +6,7 @@ are very welcome.
 ## Reporting a vulnerability
 
 Please do not open a public issue. Use GitHub's private reporting instead:
-[report a vulnerability](https://github.com/sbaqa/tessella/security/advisories/new).
+[report a vulnerability](https://github.com/sbqeng/tessella/security/advisories/new).
 
 Say what the problem is, how to reproduce it and what an attacker could do. You will get a reply
 as soon as possible; Tessella is an early-stage project with no guaranteed response time yet.

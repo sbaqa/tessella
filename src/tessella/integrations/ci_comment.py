@@ -22,7 +22,7 @@ _ACTIONABLE = (Category.product_bug, Category.test_bug, Category.flaky)
 
 
 # Where this action's docs live, linked when a runner has no model.
-_HOW_TO_ADD_A_MODEL = "https://github.com/sbaqa/tessella#running-in-ci"
+_HOW_TO_ADD_A_MODEL = "https://github.com/sbqeng/tessella#running-in-ci"
 _ROWS, _DETAILS = 50, 15  # a comment has a size limit, and a broken build has many failures
 _KINDS = (  # (pattern in the error, plain name), first match wins
     (r"time(d)?[ -]?out", "Timeout"),
