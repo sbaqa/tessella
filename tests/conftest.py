@@ -29,3 +29,12 @@ def _no_model_warm_up(monkeypatch):
     from tessella.integrations import local_llm
 
     monkeypatch.setattr(local_llm, "warm", lambda *_, **__: None)
+
+
+@pytest.fixture(autouse=True)
+def _no_decisions_file(monkeypatch):
+    """Tests never write tessella-decisions.jsonl into the working directory. A test of the
+    file itself sets ENABLED back to True."""
+    from tessella.memory import decisions_file
+
+    monkeypatch.setattr(decisions_file, "ENABLED", False)

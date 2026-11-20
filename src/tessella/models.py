@@ -116,6 +116,10 @@ class Draft(BaseModel):
     # showed ("verified: passed 2 of 2 re-runs", "not verified: ...").
     patch: str = ""
     patch_status: str = ""
+    # Set when a reviewer changed the draft before filing: who, and Tessella's own text for
+    # each field they changed (draft/ticket.py EDITABLE), so the change can be undone.
+    edited_by: str = ""
+    original: dict[str, str] = Field(default_factory=dict)
 
 
 class Action(StrEnum):
@@ -132,6 +136,9 @@ class RejectReason(StrEnum):
     test_data = "test_data"
     flaky = "flaky"
     duplicate = "duplicate"
+    already_fixed = "already_fixed"  # real, but fixed since: nothing left to file
+    wont_fix = "wont_fix"  # real, and the team chose not to fix it
+    no_action = "no_action"  # real, but nothing to file: fixed since, or not worth fixing
 
 
 class Decision(BaseModel):
@@ -145,6 +152,8 @@ class Decision(BaseModel):
     # True when approving linked to a ticket that already carried this signature's label,
     # instead of filing a new one. Each such approval is a duplicate that was not created.
     linked_existing: bool = False
+    # Approved while the board could not be reached: filed as soon as it can be.
+    pending: bool = False
 
 
 class Case(BaseModel):
@@ -169,6 +178,10 @@ class Case(BaseModel):
     verdict: Verdict | None = None
     draft: Draft | None = None
     decision: Decision | None = None
+    # Rejected earlier and back in review because new evidence changed the verdict: what was
+    # decided, for the reviewer. `recheck_fingerprint` is the evidence last re-checked.
+    reopened_from: str = ""
+    recheck_fingerprint: str = ""
 
     @staticmethod
     def make_id(*parts: str) -> str:

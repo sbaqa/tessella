@@ -42,7 +42,7 @@ def test_near_duplicate_and_not_filed_and_no_ticket():
     assert rows["f"].status == board.Status.your_call
     assert rows["r"].status == board.Status.decided and "no board was set up then" in rows["r"].note
     assert "by sdet on 01 Oct 2026" in rows["r"].note
-    assert "Reject as flaky" in rows["f"].note
+    assert "Mark it flaky" in rows["f"].note
     assert rows["p"].status == board.Status.pending
     line = board.headline(result)
     assert "1 probably already on the board (KAN-8)" in line and "1 not analysed yet" in line
@@ -64,7 +64,7 @@ def test_an_approval_that_filed_nothing_is_judged_again_once_a_board_exists():
                        reopened={"f": nothing})
     note = board.classify(result)[0].note
     assert note.startswith("approved by sdet on 18 Oct 2026 with no board, so nothing was filed")
-    assert "Reject as flaky" in note
+    assert "Mark it flaky" in note
 
 
 def test_a_test_that_fails_differently_is_a_new_question(tmp_path):

@@ -89,6 +89,8 @@ jira:
   url: https://jira.example.com
   project: QA
   token_env: JIRA_TOKEN
+  # project_id: "10000"          # for the drafts page's Approve button (tessella doctor --board)
+  # issue_type_id: "10003"
   # Duplicate search: each new draft lists issues already in the project that read like it
   # (possible duplicates for the reviewer; nothing is skipped or linked automatically).
   search_duplicates: true
@@ -119,6 +121,14 @@ ci:
   comment: false                 # or `tessella ci --comment`
   # token_env: GITHUB_TOKEN      # default GITHUB_TOKEN on GitHub, GITLAB_TOKEN on GitLab
   # queue_url: https://tessella.lan:8484
+  # max_minutes: 25              # stop asking the model after this long
+  # email:                       # tessella notify --email: findings and report links
+  #   to: ["you@example.com"]
+  #   host: smtp.gmail.com       # add it to network.allow
+  #   port: 587
+  #   tls: starttls              # or ssl, none
+  #   username_env: SMTP_USERNAME  # NAMES of env vars, never the values
+  #   password_env: SMTP_PASSWORD
 
 network:
   # Everything else is blocked. A cloud fixer only works once its host is listed here,
@@ -132,6 +142,7 @@ redact: ["Authorization", "Cookie", "password", "card_number", "iban"]
 
 storage:
   path: .tessella/tessella.sqlite
+  # decisions_file: tessella-decisions.jsonl   # commit it, so CI knows your decisions
 
 # The project's own Ollama server: models live in this repository's .tessella/models (found
 # from any subfolder, e.g. examples/demo_shop), and Tessella starts the server when a role

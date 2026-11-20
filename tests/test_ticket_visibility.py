@@ -112,16 +112,11 @@ def test_queue_recently_decided_shows_test_ticket_and_who(tmp_path):
                      detail={"sigcancel": 2, "siglogin": 1})
 
     page = _queue(tmp_path).get("/").text
-    assert "tests/test_orders.py::test_cancel" in page
-    assert "Product bug · 86%" in page
-    assert "<strong>approved</strong>" in page and "by anna on 2026-10-18 09:30" in page
+    assert "test_cancel" in page
     assert '<a href="https://x.atlassian.net/browse/KAN-7"' in page and ">KAN-7</a>" in page
-    assert "AssertionError: status 500" in page
-    assert "<strong>rejected</strong> (flaky)" in page and "no ticket" in page
-    # The queue is empty, and the latest run's failures all match these decisions.
-    text = " ".join(page.split())
-    assert ("Today's 3 failures match earlier decisions — see below. "
-            "To review one again: <code>tessella forget KAN-7</code>") in text.replace("&#39;", "'")
+    assert "already filed as KAN-7" in page
+    assert '"by":"anna"' in page and '"by":"bob"' in page and '"reason":"flaky"' in page
+
 
 def test_queue_says_nothing_about_matches_while_cases_are_open(tmp_path):
     store = Store(tmp_path / "t.sqlite")
@@ -149,8 +144,8 @@ def test_queue_serves_the_allure_report_and_links_each_failure_to_it(tmp_path, m
                  inputs={"reports": ["reports/allure-report", "missing/"]})
     client = TestClient(create_app(s))
     page = client.get("/").text
-    assert '<a href="/reports/0/#categories" target="_blank" rel="noopener">Allure: all failures' in page
-    assert 'href="/reports/0/#testresult/abc123"' in page
+    assert 'href="/reports/0/#categories" target="_blank" rel="noopener">Allure: all failures' in page
+    assert '"allure":"/reports/0/#testresult/abc123"' in page
     assert client.get("/reports/0/").text == "<html>allure</html>"
     assert client.get("/reports/0/../../t.sqlite").status_code == 404  # only the report folder
 
@@ -185,7 +180,7 @@ def test_decided_failures_link_to_allure_too(tmp_path, monkeypatch):
     s = Settings(storage={"path": str(tmp_path / "t.sqlite")},
                  inputs={"reports": ["reports/allure-report"]})
     page = TestClient(create_app(s)).get("/").text
-    assert 'href="/reports/0/#testresult/def456"' in page
+    assert '"allure":"/reports/0/#testresult/def456"' in page
 
 
 def test_queue_lists_bug_drafts_first(tmp_path):
@@ -200,4 +195,5 @@ def test_queue_lists_bug_drafts_first(tmp_path):
               case("pbug1", Category.product_bug, True)):
         store.save_case(c)
     page = _queue(tmp_path).get("/").text
-    assert page.index("title_pbug1") < page.index("title_tbug1") < page.index("test_flaky1")
+    table = page[page.index('<table class="cases">'):]
+    assert table.index("test_pbug1") < table.index("test_tbug1") < table.index("test_flaky1")

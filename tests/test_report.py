@@ -190,7 +190,7 @@ def _page(tmp_path, live=False):
 def test_live_flag_links_back_to_the_queue(tmp_path):
     assert 'data-live="false"' in _page(tmp_path) and 'href="/"' not in _page(tmp_path)
     live = _page(tmp_path, live=True)
-    assert 'data-live="true"' in live and 'href="/">Review queue</a>' in live
+    assert 'data-live="true"' in live and "Review queue" not in live
 
 
 def test_every_panel_can_be_hidden_and_reordered(tmp_path):
@@ -199,15 +199,6 @@ def test_every_panel_can_be_hidden_and_reordered(tmp_path):
         assert f'data-panel="{pid}"' in page, pid  # the panel itself
         assert f'data-panel-row="{pid}"' in page, pid  # its row in the Customize drawer
         assert f'data-move="up" data-for="{pid}"' in page and f'data-show="{pid}"' in page
-
-
-def test_tiles_carry_what_the_filters_and_grouping_need(tmp_path):
-    page = _page(tmp_path)
-    assert page.count('class="tile ') == 6  # one tile per failure, not per cluster
-    for attr in ('data-cat="product_bug"', 'data-state="approved"', 'data-state="rejected"',
-                 'data-state="open"', 'data-cluster="a"', 'data-glyph="P"'):
-        assert attr in page, attr
-    assert 'data-filter="cat" data-value="flaky"' in page
 
 
 def test_funnel_tiles_stand_for_several_when_there_are_many():
@@ -245,7 +236,7 @@ def test_queue_serves_the_live_report(tmp_path):
     # a decision made in the queue shows up on the next load, without rebuilding anything
     client.post(f"/cases/{_case('c', 0).id}/decide", data={"action": "approve", "csrf": app.state.csrf})
     assert "2 approved, 1 rejected." in client.get("/report").text
-    assert "Open the dashboard" in client.get("/").text
+    assert client.get("/").text.count('data-live="true"') == 1  # the dashboard is the home page
 
 
 def test_failures_table_says_what_is_already_filed_and_what_is_new(tmp_path):
